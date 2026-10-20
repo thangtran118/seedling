@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.gstack
+.idea
+.claude
+.env
+.env.*
+!.env.example
+coverage

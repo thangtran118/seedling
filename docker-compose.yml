@@ -1,0 +1,33 @@
+name: seedling-trudo
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: seedling
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seedling}
+      POSTGRES_DB: seedling
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - seedling-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seedling"]
+      interval: 5s
+      retries: 10
+
+  # Production app: `docker compose --profile prod up -d --build`. Put a TLS reverse proxy in front of it.
+  app:
+    profiles: ["prod"]
+    build: .
+    environment:
+      DATABASE_URL: postgres://seedling:${POSTGRES_PASSWORD:-seedling}@db:5432/seedling
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  seedling-db:
