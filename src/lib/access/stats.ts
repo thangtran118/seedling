@@ -1,109 +1,91 @@
 import "server-only";
-import { and, count, eq, gte, max, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { listenerLinks, sessionMembers, sessions, users } from "@/db/schema";
-import { addDays, dayKey, dayStart, LESSONS, weekStart, type DisplayStatus } from "@/lib/domain";
+import { listenerLinks, listeners, users } from "@/db/schema";
+import { addMonths, dayKey, dayStart } from "@/lib/domain";
 import type { SessionUser } from "./auth";
 import { forbiddenError, notFoundError } from "./errors";
-import { listListeners, listListenersLinkedTo, type ListenerSummary } from "./listeners";
-import { completedAt } from "./phase";
+import { listListenersLinkedTo, type ListenerSummary } from "./listeners";
 
-export const TREND_WEEKS = 8;
+// Listener numbers at the end of one month (Vietnam calendar). The current month counts up to now.
+export type MonthStats = {
+  month: string; // "YYYY-MM"
+  total: number; // listeners added by the end of the month
+  added: number; // listeners added during the month
+  heard: number; // of `total`, those who had reached mảnh 1 by the end of the month
+  baptized: number; // of `total`, those marked báptem by the end of the month
+};
 
-export type WeeklyCount = { weekStart: string; done: number };
+export type ListenerStats = {
+  current: MonthStats;
+  previous: MonthStats;
+  history: MonthStats[]; // every month since the first listener, newest first; empty when there is none
+};
 
-export type MemberActivity = {
+export type MemberStatsRow = {
   id: string;
   name: string;
-  doneThisWeek: number; // completed sessions joined since Monday
-  doneLastWeek: number;
-  linkedListeners: number;
-  lastDoneAt: Date | null;
+  role: SessionUser["role"];
+  current: MonthStats;
 };
 
-export type AreaStats = {
-  doneThisWeek: number;
-  doneLastWeek: number;
-  plannedAhead: number;
-  weekly: WeeklyCount[]; // oldest first, current week last
-  statusCounts: Record<DisplayStatus, number>;
-  lessonReach: { lesson: number; listeners: number }[]; // open listeners who heard each lesson
-  openListeners: number;
-  members: MemberActivity[];
-};
+export type AreaStats = { area: ListenerStats; members: MemberStatsRow[] };
 
-// One person's own numbers: sessions they went on and what they have planned.
-export type PersonalStats = {
-  doneThisWeek: number;
-  doneLastWeek: number;
-  weekly: WeeklyCount[]; // oldest first, current week last
-  plannedAhead: number;
-  linkedListeners: number;
-};
-
-export type MemberStats = PersonalStats & {
+export type MemberStats = ListenerStats & {
   member: { id: string; name: string; role: SessionUser["role"] };
   listeners: ListenerSummary[];
 };
 
-// Week boundaries (Vietnam calendar, Monday first) for the trend window ending with the week of `now`.
-function weekWindow(now: Date) {
-  const thisWeek = weekStart(dayKey(now));
+type Milestones = { createdAt: Date; firstLessonAt: Date | null; baptizedAt: Date | null };
+
+const monthKey = (d: Date) => dayKey(d).slice(0, 7);
+
+function monthStats(rows: Milestones[], month: string): MonthStats {
+  const from = dayStart(`${month}-01`).getTime();
+  const to = dayStart(`${addMonths(month, 1)}-01`).getTime();
+  const by = (d: Date | null) => d !== null && d.getTime() < to;
+  const counted = rows.filter((r) => by(r.createdAt));
   return {
-    thisWeek,
-    thisWeekFrom: dayStart(thisWeek),
-    lastWeekFrom: dayStart(addDays(thisWeek, -7)),
-    trendFrom: dayStart(addDays(thisWeek, -7 * (TREND_WEEKS - 1))),
+    month,
+    total: counted.length,
+    added: counted.filter((r) => r.createdAt.getTime() >= from).length,
+    heard: counted.filter((r) => by(r.firstLessonAt)).length,
+    baptized: counted.filter((r) => by(r.baptizedAt)).length,
   };
 }
 
-function bucketWeekly(dates: Date[], thisWeek: string): WeeklyCount[] {
-  const weekly = Array.from({ length: TREND_WEEKS }, (_, i) => ({
-    weekStart: addDays(thisWeek, -7 * (TREND_WEEKS - 1 - i)),
-    done: 0,
-  }));
-  const weekIndex = new Map(weekly.map((w, i) => [w.weekStart, i]));
-  for (const d of dates) {
-    const i = weekIndex.get(weekStart(dayKey(d)));
-    if (i !== undefined) weekly[i].done += 1;
+function summarize(rows: Milestones[], now: Date): ListenerStats {
+  const thisMonth = monthKey(now);
+  const history: MonthStats[] = [];
+  if (rows.length) {
+    const first = monthKey(new Date(Math.min(...rows.map((r) => r.createdAt.getTime()))));
+    for (let m = thisMonth; m >= first; m = addMonths(m, -1)) history.push(monthStats(rows, m));
   }
-  return weekly;
-}
-
-async function personalStats(userId: string, areaId: string, now: Date): Promise<PersonalStats> {
-  const { thisWeek, trendFrom } = weekWindow(now);
-  const mine = and(eq(sessionMembers.userId, userId), eq(sessions.areaId, areaId));
-
-  const [doneRows, [planned], [linked]] = await Promise.all([
-    db
-      .select({ startsAt: sessions.startsAt })
-      .from(sessionMembers)
-      .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
-      .where(and(mine, completedAt(now), gte(sessions.startsAt, trendFrom))),
-    db
-      .select({ n: count() })
-      .from(sessionMembers)
-      .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
-      .where(and(mine, eq(sessions.state, "planned"), gte(sessions.startsAt, now))),
-    db.select({ n: count() }).from(listenerLinks).where(eq(listenerLinks.userId, userId)),
-  ]);
-
-  const weekly = bucketWeekly(
-    doneRows.map((r) => r.startsAt),
-    thisWeek,
-  );
   return {
-    doneThisWeek: weekly[TREND_WEEKS - 1].done,
-    doneLastWeek: weekly[TREND_WEEKS - 2].done,
-    weekly,
-    plannedAhead: planned.n,
-    linkedListeners: linked.n,
+    current: history[0] ?? monthStats(rows, thisMonth),
+    previous: history[1] ?? monthStats(rows, addMonths(thisMonth, -1)),
+    history,
   };
 }
 
-// Everyone's own numbers (home page and the stats tab).
-export function myStats(viewer: SessionUser, now = new Date()): Promise<PersonalStats> {
-  return personalStats(viewer.id, viewer.areaId, now);
+const milestoneCols = {
+  createdAt: listeners.createdAt,
+  firstLessonAt: listeners.firstLessonAt,
+  baptizedAt: listeners.baptizedAt,
+};
+
+// The listeners one person walks with (người đồng hành), as counted in their own stats.
+async function linkedMilestones(userId: string, areaId: string) {
+  return db
+    .select(milestoneCols)
+    .from(listenerLinks)
+    .innerJoin(listeners, eq(listeners.id, listenerLinks.listenerId))
+    .where(and(eq(listenerLinks.userId, userId), eq(listeners.areaId, areaId)));
+}
+
+// Everyone's own numbers (home page and the stats tab). Counts only, no private fields.
+export async function myStats(viewer: SessionUser, now = new Date()): Promise<ListenerStats> {
+  return summarize(await linkedMilestones(viewer.id, viewer.areaId), now);
 }
 
 // Leader: one member of the area, with the listeners they walk with.
@@ -114,92 +96,51 @@ export async function memberStats(viewer: SessionUser, memberId: string, now = n
     .from(users)
     .where(eq(users.id, memberId));
   if (!member || member.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy thành viên.");
-  const [stats, listeners] = await Promise.all([
-    personalStats(member.id, viewer.areaId, now),
+  const [rows, linked] = await Promise.all([
+    linkedMilestones(member.id, viewer.areaId),
     listListenersLinkedTo(viewer, member.id),
   ]);
-  return { ...stats, member: { id: member.id, name: member.name, role: member.role }, listeners };
+  return {
+    ...summarize(rows, now),
+    member: { id: member.id, name: member.name, role: member.role },
+    listeners: linked,
+  };
 }
 
-// Leader dashboard. Counts only, no private fields: nothing here needs a pii_access_log row.
+// Leader dashboard: the whole area, and each active member's own numbers. Counts only, no private fields.
 export async function areaStats(viewer: SessionUser, now = new Date()): Promise<AreaStats> {
   if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng xem được thống kê.");
-  const { thisWeek, thisWeekFrom, lastWeekFrom, trendFrom } = weekWindow(now);
-  const inArea = eq(sessions.areaId, viewer.areaId);
-
-  const [doneRows, [planned], memberRows, activityRows, linkRows, listeners] = await Promise.all([
+  const [areaRows, memberRows] = await Promise.all([
+    db.select(milestoneCols).from(listeners).where(eq(listeners.areaId, viewer.areaId)),
     db
-      .select({ startsAt: sessions.startsAt })
-      .from(sessions)
-      .where(and(inArea, completedAt(now), gte(sessions.startsAt, trendFrom))),
-    db
-      .select({ n: count() })
-      .from(sessions)
-      .where(and(inArea, eq(sessions.state, "planned"), gte(sessions.startsAt, now))),
-    db
-      .select({ id: users.id, name: users.name })
+      .select({ id: users.id, name: users.name, role: users.role })
       .from(users)
       .where(and(eq(users.areaId, viewer.areaId), eq(users.active, true))),
-    db
-      .select({
-        userId: sessionMembers.userId,
-        thisWeek:
-          sql<number>`count(*) filter (where ${sessions.startsAt} >= ${thisWeekFrom.toISOString()}::timestamptz)`.mapWith(
-            Number,
-          ),
-        lastWeek: sql<number>`count(*) filter (where ${sessions.startsAt} >= ${lastWeekFrom.toISOString()}::timestamptz
-          and ${sessions.startsAt} < ${thisWeekFrom.toISOString()}::timestamptz)`.mapWith(Number),
-        last: max(sessions.startsAt),
-      })
-      .from(sessionMembers)
-      .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
-      .where(and(inArea, completedAt(now)))
-      .groupBy(sessionMembers.userId),
-    db
-      .select({ userId: listenerLinks.userId, n: count() })
-      .from(listenerLinks)
-      .innerJoin(users, eq(users.id, listenerLinks.userId))
-      .where(eq(users.areaId, viewer.areaId))
-      .groupBy(listenerLinks.userId),
-    listListeners(viewer),
   ]);
-
-  const weekly = bucketWeekly(
-    doneRows.map((r) => r.startsAt),
-    thisWeek,
-  );
-
-  const statusCounts: Record<DisplayStatus, number> = { moi_quen: 0, goi_mo: 0, dang_hoc: 0, baptem: 0, tu_choi: 0 };
-  for (const l of listeners) statusCounts[l.status] += 1;
-  const open = listeners.filter((l) => l.status !== "baptem" && l.status !== "tu_choi");
-
-  const activity = new Map(activityRows.map((r) => [r.userId, r]));
-  const links = new Map(linkRows.map((r) => [r.userId, r.n]));
+  const links = memberRows.length
+    ? await db
+        .select({ userId: listenerLinks.userId, ...milestoneCols })
+        .from(listenerLinks)
+        .innerJoin(listeners, eq(listeners.id, listenerLinks.listenerId))
+        .where(
+          and(
+            eq(listeners.areaId, viewer.areaId),
+            inArray(
+              listenerLinks.userId,
+              memberRows.map((m) => m.id),
+            ),
+          ),
+        )
+    : [];
+  const thisMonth = monthKey(now);
   const members = memberRows
     .map((m) => ({
-      id: m.id,
-      name: m.name,
-      doneThisWeek: activity.get(m.id)?.thisWeek ?? 0,
-      doneLastWeek: activity.get(m.id)?.lastWeek ?? 0,
-      linkedListeners: links.get(m.id) ?? 0,
-      lastDoneAt: (activity.get(m.id)?.last as Date | null | undefined) ?? null,
+      ...m,
+      current: monthStats(
+        links.filter((l) => l.userId === m.id),
+        thisMonth,
+      ),
     }))
-    .sort(
-      (a, b) =>
-        b.doneThisWeek - a.doneThisWeek || b.doneLastWeek - a.doneLastWeek || a.name.localeCompare(b.name, "vi"),
-    );
-
-  return {
-    doneThisWeek: weekly[TREND_WEEKS - 1].done,
-    doneLastWeek: weekly[TREND_WEEKS - 2].done,
-    plannedAhead: planned.n,
-    weekly,
-    statusCounts,
-    lessonReach: LESSONS.map((lesson) => ({
-      lesson,
-      listeners: open.filter((l) => l.lessons.includes(lesson)).length,
-    })),
-    openListeners: open.length,
-    members,
-  };
+    .sort((a, b) => b.current.total - a.current.total || a.name.localeCompare(b.name, "vi"));
+  return { area: summarize(areaRows, now), members };
 }

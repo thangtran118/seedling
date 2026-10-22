@@ -19,8 +19,9 @@ import {
 } from "@/lib/domain";
 import { AccountMenu } from "@/app/ui/account-menu";
 import { AutoRefresh } from "@/app/ui/auto-refresh";
-import { ButtonLink, Empty, Fab, Loading, Section, StatTile, weekDelta } from "@/app/ui/kit";
+import { ButtonLink, Empty, Fab, Loading, Section } from "@/app/ui/kit";
 import { ListenerRows } from "@/app/ui/listener-card";
+import { pct, rate, StatsTiles } from "@/app/ui/listener-stats";
 import { LiveSessionCard, SessionCard } from "@/app/ui/session-card";
 
 // Phone first: one column in order of what people open the app for — my week, what is happening today,
@@ -68,22 +69,15 @@ async function Home() {
       </header>
 
       <Section
-        title="Tuần này của tôi"
+        title="Tháng này của tôi"
         aside={
           <Link href="/thong-ke" className="text-sm font-medium text-accent">
             Thống kê →
           </Link>
         }
       >
-        <div className="grid grid-cols-2 gap-2 md:max-w-md md:gap-3">
-          <StatTile
-            size="sm"
-            label="Ca đã đi"
-            value={mine.doneThisWeek}
-            sub={weekDelta(mine.doneThisWeek, mine.doneLastWeek)}
-            href="/thong-ke"
-          />
-          <StatTile size="sm" label="Ca đã hẹn" value={mine.plannedAhead} sub="từ giờ trở đi" href="/lich" />
+        <div className="md:max-w-4xl">
+          <StatsTiles st={mine} size="sm" />
         </div>
         {isLeader && (
           <Suspense fallback={null}>
@@ -202,10 +196,9 @@ function PlannedByDay({ sessions, tomorrow, now }: { sessions: SessionListItem[]
   );
 }
 
-// Leader: one line of area numbers under their own week; the full dashboard is on /thong-ke.
+// Leader: one line of area numbers under their own; the full dashboard is on /thong-ke.
 async function AreaLine({ user, now }: { user: SessionUser; now: Date }) {
-  const st = await areaStats(user, now);
-  const active = st.members.filter((m) => m.doneThisWeek > 0).length;
+  const { current: c } = (await areaStats(user, now)).area;
   return (
     <Link
       href="/thong-ke"
@@ -213,10 +206,16 @@ async function AreaLine({ user, now }: { user: SessionUser; now: Date }) {
     >
       <span className="font-semibold text-ink">Khu vực</span>
       <span>
-        <b className="tabular-nums text-ink">{st.doneThisWeek}</b> ca tuần này
+        <b className="tabular-nums text-ink">{c.total}</b> chiên
       </span>
       <span>
-        <b className="tabular-nums text-ink">{active}</b>/{st.members.length} người có đi
+        <b className="tabular-nums text-ink">{c.added}</b> mới tháng này
+      </span>
+      <span>
+        nghe lẽ thật <b className="tabular-nums text-ink">{pct(rate(c.heard, c.total))}</b>
+      </span>
+      <span>
+        báptem <b className="tabular-nums text-ink">{pct(rate(c.baptized, c.total))}</b>
       </span>
     </Link>
   );

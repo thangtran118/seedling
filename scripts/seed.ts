@@ -42,13 +42,58 @@ async function main() {
     .returning();
   const [leader, an, binh, chi, dung] = users;
 
+  // added / heard / baptized: days ago, for the monthly stats history.
   const listenerSeed = [
-    { name: "Chiên 1", birthYear: 1998, status: "goi_mo" as const, owner: an, phone: "0999000001", lessons: 4 },
-    { name: "Chiên 2", birthYear: 2001, status: "moi_quen" as const, owner: an, phone: "0999000002", lessons: 0 },
-    { name: "Chiên 3", birthYear: 1995, status: "goi_mo" as const, owner: binh, phone: "0999000003", lessons: 5 },
-    { name: "Chiên 4", birthYear: 1990, status: "baptem" as const, owner: binh, phone: null, lessons: 7 },
-    { name: "Chiên 5", birthYear: null, status: "tu_choi" as const, owner: chi, phone: null, lessons: 0 },
-    { name: "Chiên 6", birthYear: 2003, status: "moi_quen" as const, owner: dung, phone: "0999000006", lessons: 0 },
+    {
+      name: "Chiên 1",
+      birthYear: 1998,
+      status: "goi_mo" as const,
+      owner: an,
+      phone: "0999000001",
+      lessons: 4,
+      added: 45,
+      heard: 30,
+    },
+    {
+      name: "Chiên 2",
+      birthYear: 2001,
+      status: "moi_quen" as const,
+      owner: an,
+      phone: "0999000002",
+      lessons: 0,
+      added: 3,
+    },
+    {
+      name: "Chiên 3",
+      birthYear: 1995,
+      status: "goi_mo" as const,
+      owner: binh,
+      phone: "0999000003",
+      lessons: 5,
+      added: 70,
+      heard: 40,
+    },
+    {
+      name: "Chiên 4",
+      birthYear: 1990,
+      status: "baptem" as const,
+      owner: binh,
+      phone: null,
+      lessons: 7,
+      added: 100,
+      heard: 60,
+      baptized: 20,
+    },
+    { name: "Chiên 5", birthYear: null, status: "tu_choi" as const, owner: chi, phone: null, lessons: 0, added: 50 },
+    {
+      name: "Chiên 6",
+      birthYear: 2003,
+      status: "moi_quen" as const,
+      owner: dung,
+      phone: "0999000006",
+      lessons: 0,
+      added: 8,
+    },
   ];
   const listeners: (typeof s.listeners.$inferSelect)[] = [];
   for (const l of listenerSeed) {
@@ -60,6 +105,9 @@ async function main() {
         birthYear: l.birthYear,
         manualStatus: l.status,
         lessonsReached: l.lessons,
+        createdAt: daysAgo(l.added),
+        firstLessonAt: l.heard ? daysAgo(l.heard) : null,
+        baptizedAt: l.baptized ? daysAgo(l.baptized) : null,
         createdBy: l.owner.id,
       })
       .returning();

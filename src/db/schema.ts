@@ -77,8 +77,12 @@ export const listeners = pgTable(
     name: varchar("name", { length: 100 }).notNull(),
     birthYear: smallint("birth_year"),
     manualStatus: manualStatusEnum("manual_status").notNull().default("moi_quen"),
-    // Mảnh set directly on the listener (0 = none yet). Progress shown is the higher of this and done sessions.
+    // Highest mảnh reached, set directly on the listener (0 = none yet).
     lessonsReached: smallint("lessons_reached").notNull().default(0),
+    // When the listener first reached mảnh 1 and when they were marked báptem (null when not / no longer): the
+    // monthly stats count each listener from these moments.
+    firstLessonAt: timestamp("first_lesson_at", { withTimezone: true }),
+    baptizedAt: timestamp("baptized_at", { withTimezone: true }),
     createdBy: uuid("created_by")
       .notNull()
       .references(() => users.id),

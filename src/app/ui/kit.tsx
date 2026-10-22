@@ -182,11 +182,6 @@ export function PhaseLegend({ phases }: { phases: SessionPhase[] }) {
 // ---------- numbers ----------
 
 // "+2 so với tuần trước" under a weekly count.
-export function weekDelta(thisWeek: number, lastWeek: number) {
-  const d = thisWeek - lastWeek;
-  return d === 0 ? "bằng tuần trước" : `${d > 0 ? "+" : ""}${d} so với tuần trước`;
-}
-
 export function StatTile({
   label,
   value,

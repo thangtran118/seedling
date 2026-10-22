@@ -22,6 +22,13 @@
       "when": 1792652923588,
       "tag": "0002_session_auto_complete",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792661947133,
+      "tag": "0003_listener_milestones",
+      "breakpoints": true
     }
   ]
 }

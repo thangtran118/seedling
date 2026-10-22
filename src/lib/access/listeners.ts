@@ -438,12 +438,25 @@ export async function updateListener(viewer: SessionUser, listenerId: string, in
 export async function setLessonsReached(viewer: SessionUser, listenerId: string, lesson: number) {
   await requireLinked(viewer, listenerId);
   if (!Number.isInteger(lesson) || lesson < 0 || lesson > LESSONS.length) throw invalidError("Mảnh không hợp lệ.");
-  await db.update(listeners).set({ lessonsReached: lesson }).where(eq(listeners.id, listenerId));
+  await db
+    .update(listeners)
+    .set({
+      lessonsReached: lesson,
+      // Keeps the first time mảnh 1 was reached; going back to 0 means they have not heard it after all.
+      firstLessonAt: lesson === 0 ? null : sql`coalesce(${listeners.firstLessonAt}, now())`,
+    })
+    .where(eq(listeners.id, listenerId));
 }
 
 export async function setManualStatus(viewer: SessionUser, listenerId: string, status: ManualStatus) {
   await requireLinked(viewer, listenerId);
-  await db.update(listeners).set({ manualStatus: status }).where(eq(listeners.id, listenerId));
+  await db
+    .update(listeners)
+    .set({
+      manualStatus: status,
+      baptizedAt: status === "baptem" ? sql`coalesce(${listeners.baptizedAt}, now())` : null,
+    })
+    .where(eq(listeners.id, listenerId));
 }
 
 // Linked users and the area leader may add a link (a leader adding themselves is how they gain edit rights).
