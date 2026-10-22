@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { daysBetween, LESSONS, lessonProgress, STALLED_AFTER_DAYS, type DisplayStatus } from "@/lib/domain";
+import { daysBetween, LESSONS, lessonProgress, type DisplayStatus } from "@/lib/domain";
 import { LessonDots, StatusBadge } from "./kit";
 
 type ListenerLike = {
@@ -75,21 +75,11 @@ export function ProgressNote({ lessons, status }: { lessons: number[]; status: D
   );
 }
 
-export function ListenerCard({
-  l,
-  footer,
-  flagged = false,
-}: {
-  l: ListenerLike;
-  footer?: ReactNode;
-  flagged?: boolean;
-}) {
+export function ListenerCard({ l, footer }: { l: ListenerLike; footer?: ReactNode }) {
   return (
     <Link
       href={`/nguoi-nghe/${l.id}`}
-      className={`flex gap-3.5 rounded-2xl border bg-surface p-3.5 transition-colors hover:border-muted/50 active:bg-line/30 ${
-        flagged ? "border-late/50" : "border-line"
-      }`}
+      className="flex gap-3.5 rounded-2xl border border-line bg-surface p-3.5 transition-colors hover:border-muted/50 active:bg-line/30"
     >
       <LessonBlock lessons={l.lessons} status={l.status} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -116,16 +106,9 @@ export function ListenerCard({
 }
 
 // One line per listener for dense lists (home, stats): name, the seven mảnh, and what needs doing next.
-export function ListenerRow({
-  l,
-  now = new Date(),
-}: {
-  l: ListenerLike & { lastDoneAt?: Date | null };
-  now?: Date;
-}) {
+export function ListenerRow({ l, now = new Date() }: { l: ListenerLike & { lastDoneAt?: Date | null }; now?: Date }) {
   const { next } = lessonProgress(l.lessons);
   const days = l.lastDoneAt ? daysBetween(new Date(l.lastDoneAt), now) : null;
-  const stalled = !closed(l.status) && (days === null || days > STALLED_AFTER_DAYS);
   return (
     <Link
       href={`/nguoi-nghe/${l.id}`}
@@ -151,12 +134,8 @@ export function ListenerRow({
           <span className="text-sm font-semibold text-done">Đã nghe đủ</span>
         )}
         {!closed(l.status) && (
-          <span className={`text-xs ${stalled ? "text-late" : "text-muted"}`}>
-            {days === null
-              ? `${stalled ? "▲ " : ""}chưa có ca`
-              : days === 0
-                ? "gặp hôm nay"
-                : `${stalled ? "▲ " : ""}${days} ngày trước`}
+          <span className="text-xs text-muted">
+            {days === null ? "chưa có ca" : days === 0 ? "gặp hôm nay" : `${days} ngày trước`}
           </span>
         )}
       </div>

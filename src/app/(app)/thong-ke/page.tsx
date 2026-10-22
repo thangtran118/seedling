@@ -5,9 +5,9 @@ import { requireUser } from "@/lib/access/current-user";
 import type { SessionUser } from "@/lib/access/auth";
 import { listListeners } from "@/lib/access/listeners";
 import { areaStats, myStats, TREND_WEEKS, type MemberActivity } from "@/lib/access/stats";
-import { addDays, daysBetween, STALLED_AFTER_DAYS, STATUS_LABEL, type DisplayStatus } from "@/lib/domain";
+import { addDays, daysBetween, STATUS_LABEL, type DisplayStatus } from "@/lib/domain";
 import { BarList, ColumnChart } from "@/app/ui/charts";
-import { Card, Empty, LessonDots, Loading, PageHeader, Section, StatTile, StatusBadge, weekDelta } from "@/app/ui/kit";
+import { Card, Empty, Loading, PageHeader, Section, StatTile, weekDelta } from "@/app/ui/kit";
 import { PersonalStatsView } from "@/app/ui/personal-stats";
 
 export const metadata: Metadata = { title: "Thống kê · Seedling" };
@@ -65,16 +65,9 @@ async function AreaStatsView({ user, now }: { user: SessionUser; now: Date }) {
         <MemberWeekList members={st.members} now={now} />
       </Section>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <StatTile label="Ca đã đi tuần này" value={st.doneThisWeek} sub={weekDelta(st.doneThisWeek, st.doneLastWeek)} />
         <StatTile label="Ca đang hẹn" value={st.plannedAhead} sub="từ giờ trở đi" href="/lich" />
-        <StatTile
-          label="Chiên cần quan tâm"
-          value={st.stalled.length}
-          alert={st.stalled.length > 0}
-          sub={`quá ${STALLED_AFTER_DAYS} ngày, trên ${st.openListeners} đang theo`}
-          href="/chung-lai"
-        />
         <StatTile
           label="Thánh đồ có đi ca"
           value={
@@ -122,37 +115,6 @@ async function AreaStatsView({ user, now }: { user: SessionUser; now: Date }) {
             total={st.openListeners}
             rows={st.lessonReach.map((r) => ({ key: String(r.lesson), label: `Mảnh ${r.lesson}`, value: r.listeners }))}
           />
-        </Card>
-
-        <Card className="flex flex-col gap-3 p-4">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold text-ink">Cần quan tâm nhất</h2>
-            <Link href="/chung-lai" className="text-sm font-medium text-accent">
-              Xem tất cả →
-            </Link>
-          </div>
-          {st.stalled.length === 0 ? (
-            <Empty>Không ai quá {STALLED_AFTER_DAYS} ngày chưa có ca.</Empty>
-          ) : (
-            <ul className="flex flex-col divide-y divide-line">
-              {st.stalled.slice(0, 5).map((l) => (
-                <li key={l.id}>
-                  <Link href={`/nguoi-nghe/${l.id}`} className="flex items-center gap-3 py-2.5 hover:opacity-80">
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium text-ink">{l.name}</span>
-                      <span className="text-xs text-late">
-                        ▲ {l.daysSince === null ? "Chưa có ca nào" : `${l.daysSince} ngày chưa có ca`}
-                      </span>
-                    </span>
-                    <span className="hidden sm:inline">
-                      <LessonDots heard={l.lessons} />
-                    </span>
-                    <StatusBadge status={l.status} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
         </Card>
       </div>
     </>

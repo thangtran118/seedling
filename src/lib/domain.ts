@@ -3,7 +3,6 @@
 export const TIME_ZONE = "Asia/Ho_Chi_Minh";
 export const LESSONS = [1, 2, 3, 4, 5, 6, 7] as const;
 // No caps on people per session: 2-4 người trudo and 1-2 chiên is only what a session usually looks like.
-export const STALLED_AFTER_DAYS = 21;
 
 export type ManualStatus = "moi_quen" | "goi_mo" | "baptem" | "tu_choi";
 export type DisplayStatus = ManualStatus | "dang_hoc";

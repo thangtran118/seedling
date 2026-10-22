@@ -73,7 +73,7 @@ async function main() {
     listeners.push(row);
   }
 
-  // Past sessions, completed automatically; listener 2 and 6 have none (should top the stalled list).
+  // Past sessions, completed automatically; listener 2 and 6 have none.
   const history: Array<{ listener: number; members: (typeof users)[number][]; ago: number }> = [
     { listener: 0, members: [an, binh], ago: 30 },
     { listener: 0, members: [an, chi], ago: 23 },

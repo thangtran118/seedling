@@ -44,7 +44,7 @@ docker compose --profile prod exec app pnpm admin bootstrap --area "..." --name 
 ## Cấu trúc
 
 - `src/db/` — schema Drizzle; bảng nhạy cảm nằm trong schema Postgres `private`.
-- `src/lib/access/` — lớp truy cập dữ liệu duy nhất: phiên/đăng nhập, chiên, ca, thành viên, chững lại, thống kê.
+- `src/lib/access/` — lớp truy cập dữ liệu duy nhất: phiên/đăng nhập, chiên, ca, thành viên, thống kê.
   Mọi hàm nhận người xem và tự kiểm quyền; dữ liệu riêng tư chỉ trả về kèm một dòng `pii_access_log`.
 - `src/lib/domain.ts` — luật thuần (trạng thái hiển thị, mảnh kế tiếp, múi giờ), dùng được ở client.
 - `src/app/` — Next.js 16 App Router, `cacheComponents` bật. Không cache dữ liệu theo phiên; mọi trang có dữ liệu đọc
@@ -59,14 +59,14 @@ của chiên. Mảnh của chiên sửa trực tiếp trên trang chiên.
 
 ## Luật quyền (tóm tắt)
 
-| | Thánh đồ được liên kết | Thánh đồ không liên kết | Khu vực trưởng |
-|---|---|---|---|
-| Xem chiên: tên, tuổi, trạng thái, mảnh | có | có | có |
-| Xem SĐT, MXH, quê, ghi chú | có (ghi log) | không | có (ghi log) |
-| Xem lịch sử hẹn ca (ngày, trạng thái, ai đi) | có (ghi log) | chỉ khi đã/đang đi ca cùng chiên (ghi log) | có (ghi log) |
-| Sửa mảnh của chiên | có | không | chỉ khi được liên kết |
-| Đặt lịch trudo (hẹn ca) | phải đồng hành với tất cả chiên trong ca | không | chỉ khi được liên kết |
-| Sửa ca (khi chưa hoàn thành); sửa chiên | có | không | chỉ khi được liên kết |
-| Hủy ca (khi chưa hoàn thành) | chỉ người tạo ca | chỉ người tạo ca | chỉ người tạo ca |
-| Xóa ca | không ai (chỉ hủy, dữ liệu giữ lại) | | |
-| Tham gia ca | chỉ ca chưa bắt đầu hoặc đang diễn ra, không giới hạn số người | | |
+|                                              | Thánh đồ được liên kết                                         | Thánh đồ không liên kết                    | Khu vực trưởng        |
+| -------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------ | --------------------- |
+| Xem chiên: tên, tuổi, trạng thái, mảnh       | có                                                             | có                                         | có                    |
+| Xem SĐT, MXH, quê, ghi chú                   | có (ghi log)                                                   | không                                      | có (ghi log)          |
+| Xem lịch sử hẹn ca (ngày, trạng thái, ai đi) | có (ghi log)                                                   | chỉ khi đã/đang đi ca cùng chiên (ghi log) | có (ghi log)          |
+| Sửa mảnh của chiên                           | có                                                             | không                                      | chỉ khi được liên kết |
+| Đặt lịch trudo (hẹn ca)                      | phải đồng hành với tất cả chiên trong ca                       | không                                      | chỉ khi được liên kết |
+| Sửa ca (khi chưa hoàn thành); sửa chiên      | có                                                             | không                                      | chỉ khi được liên kết |
+| Hủy ca (khi chưa hoàn thành)                 | chỉ người tạo ca                                               | chỉ người tạo ca                           | chỉ người tạo ca      |
+| Xóa ca                                       | không ai (chỉ hủy, dữ liệu giữ lại)                            |                                            |                       |
+| Tham gia ca                                  | chỉ ca chưa bắt đầu hoặc đang diễn ra, không giới hạn số người |                                            |                       |

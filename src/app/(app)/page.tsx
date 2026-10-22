@@ -218,11 +218,6 @@ async function AreaLine({ user, now }: { user: SessionUser; now: Date }) {
       <span>
         <b className="tabular-nums text-ink">{active}</b>/{st.members.length} người có đi
       </span>
-      {st.stalled.length > 0 && (
-        <span className="text-late">
-          ▲ <b className="tabular-nums">{st.stalled.length}</b> chiên cần quan tâm
-        </span>
-      )}
     </Link>
   );
 }

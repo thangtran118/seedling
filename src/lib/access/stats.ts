@@ -5,9 +5,8 @@ import { listenerLinks, sessionMembers, sessions, users } from "@/db/schema";
 import { addDays, dayKey, dayStart, LESSONS, weekStart, type DisplayStatus } from "@/lib/domain";
 import type { SessionUser } from "./auth";
 import { forbiddenError, notFoundError } from "./errors";
-import { listListenersLinkedTo, type ListenerSummary } from "./listeners";
+import { listListeners, listListenersLinkedTo, type ListenerSummary } from "./listeners";
 import { completedAt } from "./phase";
-import { stalledListeners, type StalledItem } from "./stalled";
 
 export const TREND_WEEKS = 8;
 
@@ -30,7 +29,6 @@ export type AreaStats = {
   statusCounts: Record<DisplayStatus, number>;
   lessonReach: { lesson: number; listeners: number }[]; // open listeners who heard each lesson
   openListeners: number;
-  stalled: StalledItem[]; // open listeners past the stalled threshold, worst first
   members: MemberActivity[];
 };
 
@@ -163,7 +161,7 @@ export async function areaStats(viewer: SessionUser, now = new Date()): Promise<
       .innerJoin(users, eq(users.id, listenerLinks.userId))
       .where(eq(users.areaId, viewer.areaId))
       .groupBy(listenerLinks.userId),
-    stalledListeners(viewer, { includeClosed: true }),
+    listListeners(viewer),
   ]);
 
   const weekly = bucketWeekly(
@@ -202,7 +200,6 @@ export async function areaStats(viewer: SessionUser, now = new Date()): Promise<
       listeners: open.filter((l) => l.lessons.includes(lesson)).length,
     })),
     openListeners: open.length,
-    stalled: open.filter((l) => l.flagged),
     members,
   };
 }
