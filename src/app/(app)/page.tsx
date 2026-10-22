@@ -21,7 +21,7 @@ import { AccountMenu } from "@/app/ui/account-menu";
 import { AutoRefresh } from "@/app/ui/auto-refresh";
 import { ButtonLink, Empty, Fab, Loading, Section } from "@/app/ui/kit";
 import { ListenerRows } from "@/app/ui/listener-card";
-import { pct, rate, StatsTiles } from "@/app/ui/listener-stats";
+import { StatsTiles } from "@/app/ui/listener-stats";
 import { LiveSessionCard, SessionCard } from "@/app/ui/session-card";
 
 // Phone first: one column in order of what people open the app for — my week, what is happening today,
@@ -79,12 +79,13 @@ async function Home() {
         <div className="md:max-w-4xl">
           <StatsTiles st={mine} size="sm" />
         </div>
-        {isLeader && (
-          <Suspense fallback={null}>
-            <AreaLine user={user} now={now} />
-          </Suspense>
-        )}
       </Section>
+
+      {isLeader && (
+        <Suspense fallback={null}>
+          <AreaMonth user={user} now={now} />
+        </Suspense>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="flex flex-col gap-6">
@@ -196,27 +197,14 @@ function PlannedByDay({ sessions, tomorrow, now }: { sessions: SessionListItem[]
   );
 }
 
-// Leader: one line of area numbers under their own; the full dashboard is on /thong-ke.
-async function AreaLine({ user, now }: { user: SessionUser; now: Date }) {
-  const { current: c } = (await areaStats(user, now)).area;
+// Leader: the area's numbers in the same blocks as their own; the full dashboard is on /thong-ke.
+async function AreaMonth({ user, now }: { user: SessionUser; now: Date }) {
+  const { area } = await areaStats(user, now);
   return (
-    <Link
-      href="/thong-ke"
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-line bg-surface px-3.5 py-2.5 text-sm text-muted transition-colors hover:border-muted/50 md:max-w-2xl"
-    >
-      <span className="font-semibold text-ink">Khu vực</span>
-      <span>
-        <b className="tabular-nums text-ink">{c.total}</b> chiên
-      </span>
-      <span>
-        <b className="tabular-nums text-ink">{c.added}</b> mới tháng này
-      </span>
-      <span>
-        nghe lẽ thật <b className="tabular-nums text-ink">{pct(rate(c.heard, c.total))}</b>
-      </span>
-      <span>
-        báptem <b className="tabular-nums text-ink">{pct(rate(c.baptized, c.total))}</b>
-      </span>
-    </Link>
+    <Section title="Khu vực tháng này">
+      <div className="md:max-w-4xl">
+        <StatsTiles st={area} size="sm" />
+      </div>
+    </Section>
   );
 }
