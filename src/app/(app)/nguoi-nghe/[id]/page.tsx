@@ -1,13 +1,25 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { addLinkAction, removeLinkAction, setStatusAction } from "@/app/actions/listeners";
+import { addLinkAction, removeLinkAction, setLessonsAction, setStatusAction } from "@/app/actions/listeners";
 import { requireUser } from "@/lib/access/current-user";
 import { getListenerDetail, type ListenerDetail } from "@/lib/access/listeners";
 import { listAreaMembers } from "@/lib/access/members";
-import { formatDate, formatDateTime, SESSION_STATE_LABEL, STATUS_LABEL, type ManualStatus } from "@/lib/domain";
+import { formatDate, formatDateTime, LESSONS, sessionPhase, STATUS_LABEL, type ManualStatus } from "@/lib/domain";
 import { ActionForm, PendingButton } from "@/app/ui/action-form";
-import { ButtonLink, Card, Empty, LessonDots, Loading, Notice, PageHeader, Section, StatusBadge } from "@/app/ui/kit";
+import {
+  ButtonLink,
+  Card,
+  Empty,
+  LessonDots,
+  Loading,
+  Notice,
+  PageHeader,
+  PHASE_TONE,
+  PhaseBadge,
+  Section,
+  StatusBadge,
+} from "@/app/ui/kit";
 import { LessonBlock, ProgressNote } from "@/app/ui/listener-card";
 import { loadOr404 } from "@/app/ui/load";
 
@@ -67,15 +79,8 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
         <LessonDots heard={l.lessons} size="md" />
       </section>
 
-      {/* Recording and planning are for direct companions (người đồng hành) only, the area leader included. */}
-      {l.canEdit && (
-        <div className="grid grid-cols-2 gap-3">
-          <ButtonLink href={`/ca/ghi?nguoi-nghe=${l.id}`}>Ghi ca</ButtonLink>
-          <ButtonLink href={`/ca/hen?nguoi-nghe=${l.id}`} variant="secondary">
-            Hẹn ca
-          </ButtonLink>
-        </div>
-      )}
+      {/* Planning is for direct companions (người đồng hành) only, the area leader included. */}
+      {l.canEdit && <ButtonLink href={`/ca/hen?nguoi-nghe=${l.id}`}>Đặt lịch trudo</ButtonLink>}
 
       {l.private && (
         <Section title="Thông tin riêng tư">
@@ -104,6 +109,35 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
             </dl>
           </Card>
           <p className="text-xs text-muted">Lần xem này đã được ghi lại.</p>
+        </Section>
+      )}
+
+      {l.canEdit && (
+        <Section title="Mảnh">
+          {/* key: reset the select to the saved value after a save or a rejected one */}
+          <ActionForm
+            key={l.lessons.length}
+            action={setLessonsAction}
+            hidden={{ listenerId: l.id }}
+            className="flex flex-wrap gap-2"
+          >
+            <>
+              <select
+                name="lesson"
+                defaultValue={l.lessons.length}
+                className="h-11 flex-1 rounded-lg border border-line bg-surface px-3"
+              >
+                <option value={0}>Chưa nghe mảnh nào</option>
+                {LESSONS.map((n) => (
+                  <option key={n} value={n}>
+                    Đã đến mảnh {n}
+                  </option>
+                ))}
+              </select>
+              <PendingButton className="h-11 rounded-lg border border-line px-4 text-sm">Lưu</PendingButton>
+            </>
+          </ActionForm>
+          <p className="text-xs text-muted">Chọn mảnh chiên đã đến; các mảnh trước đó tự tính là đã xong.</p>
         </Section>
       )}
 
@@ -182,54 +216,45 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
 function History({ history }: { history: ListenerDetail["history"] }) {
   if (history === null) {
     return (
-      <Section title="Lịch sử nghe">
-        <Notice>Lịch sử nghe chỉ hiện với người đồng hành, người đã đi ca cùng chiên này và khu vực trưởng.</Notice>
+      <Section title="Lịch sử hẹn ca">
+        <Notice>Lịch sử hẹn ca chỉ hiện với người đồng hành, người đã đi ca cùng chiên này và khu vực trưởng.</Notice>
       </Section>
     );
   }
-  const done = history.filter((h) => h.state === "done");
+  // Saved automatically: every session with this chiên shows here, and turns "Hoàn thành" 2 hours after it starts
+  // unless it was cancelled.
+  const now = new Date();
+  const items = history.map((h) => ({ ...h, phase: sessionPhase(h.state, h.startsAt, now) }));
+  const done = items.filter((h) => h.phase === "done");
   return (
     <Section
-      title="Lịch sử nghe"
+      title="Lịch sử hẹn ca"
       aside={
         done.length > 0 && (
           <span className="text-xs text-muted">
-            {done.length} ca đã đi · gần nhất {formatDate(done[0].startsAt)}
+            {done.length} ca hoàn thành · gần nhất {formatDate(done[0].startsAt)}
           </span>
         )
       }
     >
-      {history.length === 0 ? (
+      {items.length === 0 ? (
         <Empty>Chưa có ca nào.</Empty>
       ) : (
         <ol className="relative flex flex-col gap-3 border-l-2 border-line pl-4">
-          {history.map((h) => (
+          {items.map((h) => (
             <li key={h.sessionId} className="relative">
               <span
-                className={`absolute -left-[23px] top-4 h-3 w-3 rounded-full border-2 border-bg ${
-                  h.state === "done" ? "bg-done" : h.state === "planned" ? "bg-plan" : "bg-muted"
-                }`}
+                className={`absolute -left-[23px] top-4 h-3 w-3 rounded-full border-2 border-bg ${PHASE_TONE[h.phase].bg}`}
                 aria-hidden
               />
-              <Card href={`/ca/${h.sessionId}`} className={h.state === "cancelled" ? "opacity-60" : ""}>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className={`font-semibold text-ink ${h.state === "cancelled" ? "line-through" : ""}`}>
+              <Card href={`/ca/${h.sessionId}`} className={h.phase === "cancelled" ? "opacity-60" : ""}>
+                <div className="flex items-start justify-between gap-2">
+                  <span className={`font-semibold text-ink ${h.phase === "cancelled" ? "line-through" : ""}`}>
                     {formatDateTime(h.startsAt)}
                   </span>
-                  {h.state !== "done" && <span className="text-xs text-muted">{SESSION_STATE_LABEL[h.state]}</span>}
+                  <PhaseBadge phase={h.phase} />
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {h.lessons.length ? (
-                    h.lessons.map((n) => (
-                      <span key={n} className="rounded-md bg-done/15 px-2 py-0.5 text-xs font-semibold text-done">
-                        Mảnh {n}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-muted">{h.state === "done" ? "Chỉ gặp gỡ" : "Chưa có kết quả"}</span>
-                  )}
-                  {h.locationLabel && <span className="text-xs text-muted">· {h.locationLabel}</span>}
-                </div>
+                {h.locationLabel && <p className="mt-1 text-sm text-muted">{h.locationLabel}</p>}
                 <p className="mt-1.5 text-sm text-muted">
                   <span className="text-ink">Người trudo:</span> {h.members.join(", ")}
                 </p>

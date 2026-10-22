@@ -9,6 +9,7 @@ import {
   createListener,
   findSimilarListeners,
   removeLink,
+  setLessonsReached,
   setManualStatus,
   updateListener,
 } from "@/lib/access/listeners";
@@ -83,6 +84,21 @@ export async function setStatusAction(_prev: SimpleState, formData: FormData): P
   const parsed = statusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Dữ liệu không hợp lệ." };
   const result = await guard(() => setManualStatus(user, parsed.data.listenerId, parsed.data.status));
+  if (result) return { error: result.error };
+  refresh();
+  return {};
+}
+
+const lessonsSchema = z.object({
+  listenerId: z.string().uuid(),
+  lesson: z.coerce.number().int().min(0).max(7),
+});
+
+export async function setLessonsAction(_prev: SimpleState, formData: FormData): Promise<SimpleState> {
+  const user = await requireUser();
+  const parsed = lessonsSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Dữ liệu không hợp lệ." };
+  const result = await guard(() => setLessonsReached(user, parsed.data.listenerId, parsed.data.lesson));
   if (result) return { error: result.error };
   refresh();
   return {};

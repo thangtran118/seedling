@@ -11,6 +11,7 @@ import {
   formatDayLong,
   formatMonth,
   formatTime,
+  isOpenPhase,
   monthGrid,
   parseDayKey,
   parseMonthKey,
@@ -32,7 +33,7 @@ export default function CalendarPage(props: PageProps<"/lich">) {
         title="Lịch khu vực"
         action={
           <Link href="/ca/hen" className="rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-on-accent">
-            + Hẹn ca
+            + Đặt lịch trudo
           </Link>
         }
       />
@@ -46,7 +47,7 @@ export default function CalendarPage(props: PageProps<"/lich">) {
 const href = (month: string, day: string) => `/lich?thang=${month}&ngay=${day}`;
 
 function joinNote(s: SessionListItem, phase: SessionPhase) {
-  if (phase !== "upcoming") return undefined;
+  if (!isOpenPhase(phase)) return undefined;
   return s.isMember ? "Bạn đã tham gia" : s.canJoin ? "Bấm để tham gia" : undefined;
 }
 
@@ -110,9 +111,9 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
           </div>
 
           <p className="text-sm text-muted">
-            <b className="text-ink">{inMonth.length}</b> ca trong tháng · {count("done")} đã đi ·{" "}
-            {count("upcoming") + count("live")} đang hẹn
-            {count("overdue") > 0 && <> · {count("overdue")} chưa ghi kết quả</>}
+            <b className="text-ink">{inMonth.length}</b> ca trong tháng · {count("done")} hoàn thành ·{" "}
+            {count("upcoming")} chưa bắt đầu
+            {count("live") > 0 && <> · {count("live")} đang diễn ra</>}
             {count("cancelled") > 0 && <> · {count("cancelled")} đã hủy</>}
           </p>
 
@@ -140,7 +141,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
               </div>
             ))}
           </div>
-          <PhaseLegend phases={["live", "upcoming", "overdue", "done", "cancelled"]} />
+          <PhaseLegend phases={["upcoming", "live", "done", "cancelled"]} />
         </section>
 
         <div className="flex flex-col gap-6">
@@ -155,7 +156,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
             )}
             {selected >= today && agenda.length === 0 && (
               <ButtonLink href="/ca/hen" variant="secondary">
-                Hẹn ca
+                Đặt lịch trudo
               </ButtonLink>
             )}
           </Section>

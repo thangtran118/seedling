@@ -51,15 +51,22 @@ docker compose --profile prod exec app pnpm admin bootstrap --area "..." --name 
   phiên sau `<Suspense>`. Đăng xuất tải lại toàn trang để xóa các trang Next giữ ẩn trong DOM.
 - `public/sw.js` — service worker chỉ cache tài nguyên tĩnh, không bao giờ cache HTML/RSC.
 
+## Trạng thái ca
+
+Ca chỉ lưu "đã hẹn" hoặc "đã hủy"; trạng thái hiển thị tính theo giờ bắt đầu: **Chưa bắt đầu** → **Đang diễn ra**
+(2 tiếng đầu) → **Hoàn thành** (tự động, không cần ghi kết quả). Ca bị hủy hiện **Đã hủy** và vẫn nằm trong lịch sử
+của chiên. Mảnh của chiên sửa trực tiếp trên trang chiên.
+
 ## Luật quyền (tóm tắt)
 
 | | Thánh đồ được liên kết | Thánh đồ không liên kết | Khu vực trưởng |
 |---|---|---|---|
 | Xem chiên: tên, tuổi, trạng thái, mảnh | có | có | có |
 | Xem SĐT, MXH, quê, ghi chú | có (ghi log) | không | có (ghi log) |
-| Xem lịch sử nghe (ngày, mảnh từng ca, ai đi) | có (ghi log) | chỉ khi đã/đang đi ca cùng chiên (ghi log) | có (ghi log) |
-| Ghi ca vừa xong / ghi kết quả ca | phải đồng hành với tất cả chiên trong ca | không | chỉ khi được liên kết |
-| Hẹn ca | phải đồng hành với tất cả chiên trong ca | không | chỉ khi được liên kết |
-| Sửa, hủy ca; sửa chiên | có | không | chỉ khi được liên kết |
+| Xem lịch sử hẹn ca (ngày, trạng thái, ai đi) | có (ghi log) | chỉ khi đã/đang đi ca cùng chiên (ghi log) | có (ghi log) |
+| Sửa mảnh của chiên | có | không | chỉ khi được liên kết |
+| Đặt lịch trudo (hẹn ca) | phải đồng hành với tất cả chiên trong ca | không | chỉ khi được liên kết |
+| Sửa ca (khi chưa hoàn thành); sửa chiên | có | không | chỉ khi được liên kết |
+| Hủy ca (khi chưa hoàn thành) | chỉ người tạo ca | chỉ người tạo ca | chỉ người tạo ca |
 | Xóa ca | không ai (chỉ hủy, dữ liệu giữ lại) | | |
-| Tham gia ca | chỉ ca đang hẹn, không giới hạn số người | | |
+| Tham gia ca | chỉ ca chưa bắt đầu hoặc đang diễn ra, không giới hạn số người | | |

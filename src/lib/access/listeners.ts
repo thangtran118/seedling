@@ -6,7 +6,6 @@ import {
   listenerPrivate,
   listeners,
   piiAccessLog,
-  sessionLessons,
   sessionListeners,
   sessionMembers,
   sessions,
@@ -15,11 +14,13 @@ import {
 import {
   ageFromBirthYear,
   displayStatus,
+  LESSONS,
   type DisplayStatus,
   type ManualStatus,
   type SessionState,
 } from "@/lib/domain";
 import type { SessionUser } from "./auth";
+import { completedAt } from "./phase";
 import { forbiddenError, invalidError, notFoundError } from "./errors";
 
 // ---------- DTOs: the only listener shapes that leave the access layer ----------
@@ -51,7 +52,6 @@ export type ListenerHistoryItem = {
   state: SessionState;
   locationLabel: string | null;
   members: string[];
-  lessons: number[];
 };
 
 export type ListenerDetail = ListenerSummary & {
@@ -76,7 +76,7 @@ export async function isLinked(userId: string, listenerId: string) {
   return Boolean(row);
 }
 
-// Listening history (which day, which lessons in each session, who went) is visible to the listener's linked
+// Listening history (which day each session was, who went) is visible to the listener's linked
 // users, to anyone who went or is going on a session with them (cancelled ones do not count), and to the area
 // leader. Returns the subset of listenerIds (all in the viewer's area) whose history this viewer may see.
 export async function historyVisibleListenerIds(viewer: SessionUser, listenerIds: string[]): Promise<Set<string>> {
@@ -104,35 +104,20 @@ export async function historyVisibleListenerIds(viewer: SessionUser, listenerIds
   return new Set([...linked, ...joined].map((r) => r.id));
 }
 
-// Progress is sequential: reaching lesson N counts 1..N-1 as heard too, so only the highest lesson ever
-// recorded (in a done session) needs tracking — this fills that in as a contiguous 1..N run per listener.
-// Cancelled/planned sessions never count; pass excludeSessionId while editing a session's own recorded lesson
-// so it does not count against its own baseline.
-export async function lessonsHeardFor(
-  listenerIds: string[],
-  opts: { excludeSessionId?: string } = {},
-): Promise<Map<string, number[]>> {
+// Progress is sequential: reaching lesson N counts 1..N-1 as heard too, so only the highest lesson reached
+// (set directly on the listener) is stored — this fills that in as a contiguous 1..N run per listener.
+export async function lessonsHeardFor(listenerIds: string[]): Promise<Map<string, number[]>> {
   const result = new Map<string, number[]>(listenerIds.map((id) => [id, []]));
   if (listenerIds.length === 0) return result;
   const rows = await db
-    .select({ listenerId: sessionLessons.listenerId, latest: max(sessionLessons.lesson) })
-    .from(sessionLessons)
-    .innerJoin(sessions, eq(sessions.id, sessionLessons.sessionId))
-    .where(
-      and(
-        inArray(sessionLessons.listenerId, listenerIds),
-        eq(sessions.state, "done"),
-        opts.excludeSessionId ? ne(sessionLessons.sessionId, opts.excludeSessionId) : undefined,
-      ),
-    )
-    .groupBy(sessionLessons.listenerId);
-  for (const r of rows) {
-    if (r.latest)
-      result.set(
-        r.listenerId,
-        Array.from({ length: r.latest }, (_, i) => i + 1),
-      );
-  }
+    .select({ id: listeners.id, latest: listeners.lessonsReached })
+    .from(listeners)
+    .where(inArray(listeners.id, listenerIds));
+  for (const r of rows)
+    result.set(
+      r.id,
+      Array.from({ length: r.latest }, (_, i) => i + 1),
+    );
   return result;
 }
 
@@ -142,7 +127,7 @@ async function lastDoneFor(listenerIds: string[]): Promise<Map<string, Date>> {
     .select({ listenerId: sessionListeners.listenerId, last: max(sessions.startsAt) })
     .from(sessionListeners)
     .innerJoin(sessions, eq(sessions.id, sessionListeners.sessionId))
-    .where(and(inArray(sessionListeners.listenerId, listenerIds), eq(sessions.state, "done")))
+    .where(and(inArray(sessionListeners.listenerId, listenerIds), completedAt(new Date())))
     .groupBy(sessionListeners.listenerId);
   return new Map(rows.filter((r) => r.last).map((r) => [r.listenerId, r.last as Date]));
 }
@@ -335,22 +320,14 @@ async function listenerHistory(listenerId: string): Promise<ListenerHistoryItem[
     .orderBy(desc(sessions.startsAt));
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.sessionId);
-  const [members, lessons] = await Promise.all([
-    db
-      .select({ sessionId: sessionMembers.sessionId, name: users.name })
-      .from(sessionMembers)
-      .innerJoin(users, eq(users.id, sessionMembers.userId))
-      .where(inArray(sessionMembers.sessionId, ids)),
-    db
-      .select({ sessionId: sessionLessons.sessionId, lesson: sessionLessons.lesson })
-      .from(sessionLessons)
-      .where(and(inArray(sessionLessons.sessionId, ids), eq(sessionLessons.listenerId, listenerId)))
-      .orderBy(asc(sessionLessons.lesson)),
-  ]);
+  const members = await db
+    .select({ sessionId: sessionMembers.sessionId, name: users.name })
+    .from(sessionMembers)
+    .innerJoin(users, eq(users.id, sessionMembers.userId))
+    .where(inArray(sessionMembers.sessionId, ids));
   return rows.map((r) => ({
     ...r,
     members: members.filter((m) => m.sessionId === r.sessionId).map((m) => m.name),
-    lessons: lessons.filter((l) => l.sessionId === r.sessionId).map((l) => l.lesson),
   }));
 }
 
@@ -455,6 +432,13 @@ export async function updateListener(viewer: SessionUser, listenerId: string, in
       .onConflictDoUpdate({ target: listenerPrivate.listenerId, set: clean.private });
     await tx.insert(piiAccessLog).values({ viewerId: viewer.id, listenerId, reason: "edit_listener_private" });
   });
+}
+
+// Mảnh is edited directly on the listener (0 = chưa nghe mảnh nào); sessions do not record lessons.
+export async function setLessonsReached(viewer: SessionUser, listenerId: string, lesson: number) {
+  await requireLinked(viewer, listenerId);
+  if (!Number.isInteger(lesson) || lesson < 0 || lesson > LESSONS.length) throw invalidError("Mảnh không hợp lệ.");
+  await db.update(listeners).set({ lessonsReached: lesson }).where(eq(listeners.id, listenerId));
 }
 
 export async function setManualStatus(viewer: SessionUser, listenerId: string, status: ManualStatus) {

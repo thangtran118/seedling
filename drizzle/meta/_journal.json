@@ -8,6 +8,20 @@
       "when": 1792305559733,
       "tag": "0000_friendly_colonel_america",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792652225458,
+      "tag": "0001_listener_lessons_reached",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792652923588,
+      "tag": "0002_session_auto_complete",
+      "breakpoints": true
     }
   ]
 }

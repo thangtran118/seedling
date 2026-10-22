@@ -22,7 +22,7 @@ const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull(
 
 export const roleEnum = pgEnum("role", ["member", "area_leader"]);
 export const manualStatusEnum = pgEnum("manual_status", ["moi_quen", "goi_mo", "baptem", "tu_choi"]);
-export const sessionStateEnum = pgEnum("session_state", ["planned", "done", "cancelled"]);
+export const sessionStateEnum = pgEnum("session_state", ["planned", "cancelled"]);
 
 export const areas = pgTable("areas", {
   id: id(),
@@ -67,19 +67,25 @@ export const loginAttempts = pgTable("login_attempts", {
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const listeners = pgTable("listeners", {
-  id: id(),
-  areaId: uuid("area_id")
-    .notNull()
-    .references(() => areas.id),
-  name: varchar("name", { length: 100 }).notNull(),
-  birthYear: smallint("birth_year"),
-  manualStatus: manualStatusEnum("manual_status").notNull().default("moi_quen"),
-  createdBy: uuid("created_by")
-    .notNull()
-    .references(() => users.id),
-  createdAt: createdAt(),
-});
+export const listeners = pgTable(
+  "listeners",
+  {
+    id: id(),
+    areaId: uuid("area_id")
+      .notNull()
+      .references(() => areas.id),
+    name: varchar("name", { length: 100 }).notNull(),
+    birthYear: smallint("birth_year"),
+    manualStatus: manualStatusEnum("manual_status").notNull().default("moi_quen"),
+    // Mảnh set directly on the listener (0 = none yet). Progress shown is the higher of this and done sessions.
+    lessonsReached: smallint("lessons_reached").notNull().default(0),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [check("lessons_reached_range", sql`${t.lessonsReached} between 0 and 7`)],
+);
 
 export const listenerLinks = pgTable(
   "listener_links",
@@ -138,23 +144,6 @@ export const sessionListeners = pgTable(
       .references(() => listeners.id),
   },
   (t) => [primaryKey({ columns: [t.sessionId, t.listenerId] })],
-);
-
-export const sessionLessons = pgTable(
-  "session_lessons",
-  {
-    sessionId: uuid("session_id")
-      .notNull()
-      .references(() => sessions.id),
-    listenerId: uuid("listener_id")
-      .notNull()
-      .references(() => listeners.id),
-    lesson: smallint("lesson").notNull(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.sessionId, t.listenerId, t.lesson] }),
-    check("lesson_range", sql`${t.lesson} between 1 and 7`),
-  ],
 );
 
 export const piiAccessLog = pgTable("pii_access_log", {

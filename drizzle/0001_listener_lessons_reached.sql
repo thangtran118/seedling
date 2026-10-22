@@ -1,0 +1,2 @@
+ALTER TABLE "listeners" ADD COLUMN "lessons_reached" smallint DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "listeners" ADD CONSTRAINT "lessons_reached_range" CHECK ("listeners"."lessons_reached" between 0 and 7);

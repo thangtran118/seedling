@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Session phase colors (live / planned / done / overdue) are validated as a set for color-vision deficiency;
+/* Session phase colors (live / upcoming / done, plus --late for alerts) are validated as a set for color-vision deficiency;
    the amber/green pair only reaches the floor band, so every phase also carries a label or glyph. */
 :root {
   --bg: #f4f2ec;

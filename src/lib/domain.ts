@@ -7,7 +7,8 @@ export const STALLED_AFTER_DAYS = 21;
 
 export type ManualStatus = "moi_quen" | "goi_mo" | "baptem" | "tu_choi";
 export type DisplayStatus = ManualStatus | "dang_hoc";
-export type SessionState = "planned" | "done" | "cancelled";
+// Stored state. Whether a session is upcoming, in progress or completed follows from its start time (sessionPhase).
+export type SessionState = "planned" | "cancelled";
 
 export const STATUS_LABEL: Record<DisplayStatus, string> = {
   moi_quen: "Mới quen",
@@ -17,12 +18,6 @@ export const STATUS_LABEL: Record<DisplayStatus, string> = {
   tu_choi: "Từ chối",
 };
 
-export const SESSION_STATE_LABEL: Record<SessionState, string> = {
-  planned: "Đã hẹn",
-  done: "Đã đi",
-  cancelled: "Đã hủy",
-};
-
 // Design doc, Luật trạng thái: baptem/tu_choi are never changed automatically; otherwise any heard
 // lesson means "Đang học"; otherwise the manual status (mới quen / gợi mở) shows.
 export function displayStatus(manual: ManualStatus, lessonsHeard: readonly number[]): DisplayStatus {
@@ -30,13 +25,13 @@ export function displayStatus(manual: ManualStatus, lessonsHeard: readonly numbe
   return lessonsHeard.length > 0 ? "dang_hoc" : manual;
 }
 
-// Pre-selected chip when recording: the smallest lesson not heard yet (null when all 7 are done).
+// The mảnh to share next: the smallest lesson not heard yet (null when all 7 are done).
 export function nextLesson(lessonsHeard: readonly number[]): number | null {
   return LESSONS.find((l) => !lessonsHeard.includes(l)) ?? null;
 }
 
 // "Đang ở mảnh mấy": progress is sequential — reaching mảnh N means 1..N-1 are done too, so only the
-// highest lesson ever reached matters. `lessonsHeard` is expected to already be that contiguous 1..N run
+// highest lesson reached matters. `lessonsHeard` is expected to already be that contiguous 1..N run
 // (see lessonsHeardFor), so this is just naming its edges.
 export function lessonProgress(lessonsHeard: readonly number[]) {
   const latest = lessonsHeard.length ? Math.max(...lessonsHeard) : null;
@@ -94,34 +89,34 @@ export function fromLocalInputValue(value: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-// A session that already happened must not default to a time in the future, so round down.
+// Default times land on a quarter hour.
 export function floorToQuarterHour(d: Date): Date {
   const q = 15 * 60 * 1000;
   return new Date(Math.floor(d.getTime() / q) * q);
 }
 
-// How far in the future a "done" session may be dated (clock skew, rounding).
-export const DONE_FUTURE_TOLERANCE_MS = 60 * 60 * 1000;
+// ---------- session phases & calendar (Vietnam is UTC+7 all year, no DST) ----------
 
-// ---------- live sessions & calendar (Vietnam is UTC+7 all year, no DST) ----------
-
-// A planned session counts as "in progress" for this long after its start; after that it waits to be recorded.
+// A session is "in progress" for this long after its start; after that, unless cancelled, it is completed
+// automatically and counts in the listening history. Nobody records a result.
 export const SESSION_LIVE_MS = 2 * 60 * 60 * 1000;
 
-export type SessionPhase = "live" | "upcoming" | "overdue" | "done" | "cancelled";
+export type SessionPhase = "upcoming" | "live" | "done" | "cancelled";
 
 export function sessionPhase(state: SessionState, startsAt: Date | string, now = new Date()): SessionPhase {
-  if (state !== "planned") return state;
+  if (state === "cancelled") return "cancelled";
   const start = new Date(startsAt).getTime();
   if (now.getTime() < start) return "upcoming";
-  return now.getTime() < start + SESSION_LIVE_MS ? "live" : "overdue";
+  return now.getTime() < start + SESSION_LIVE_MS ? "live" : "done";
 }
 
+// Upcoming or in progress: people can still join, leave, edit or cancel it.
+export const isOpenPhase = (phase: SessionPhase) => phase === "upcoming" || phase === "live";
+
 export const PHASE_LABEL: Record<SessionPhase, string> = {
+  upcoming: "Chưa bắt đầu",
   live: "Đang diễn ra",
-  upcoming: "Đã hẹn",
-  overdue: "Chưa ghi kết quả",
-  done: "Đã đi",
+  done: "Hoàn thành",
   cancelled: "Đã hủy",
 };
 

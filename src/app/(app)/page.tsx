@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/access/current-user";
 import { listListeners, type ListenerSummary } from "@/lib/access/listeners";
-import { homeOverview, listAreaSessionsBetween, type SessionListItem } from "@/lib/access/sessions";
+import { listAreaSessionsBetween, type SessionListItem } from "@/lib/access/sessions";
 import { areaStats, myStats } from "@/lib/access/stats";
 import type { SessionUser } from "@/lib/access/auth";
 import {
@@ -43,8 +43,7 @@ async function Home() {
   const tomorrow = addDays(today, 1);
   // Include sessions that started late last night and are still inside their live window.
   const from = new Date(Math.min(dayStart(today).getTime(), now.getTime() - SESSION_LIVE_MS));
-  const [{ overdue }, todays, ahead, mine, listeners] = await Promise.all([
-    homeOverview(user),
+  const [todays, ahead, mine, listeners] = await Promise.all([
     listAreaSessionsBetween(user, from, dayStart(tomorrow)),
     listAreaSessionsBetween(user, dayStart(tomorrow), dayStart(addDays(tomorrow, PLANNED_DAYS))),
     myStats(user, now),
@@ -54,8 +53,6 @@ async function Home() {
   const live = todays.filter((s) => sessionPhase(s.state, s.startsAt, now) === "live");
   const rest = todays.filter((s) => sessionPhase(s.state, s.startsAt, now) !== "live");
   const next = todays.find((s) => sessionPhase(s.state, s.startsAt, now) === "upcoming");
-  // Sessions still inside their live window show under "Hôm nay", not as "chưa ghi kết quả".
-  const late = overdue.filter((s) => sessionPhase(s.state, s.startsAt, now) === "overdue");
   const planned = ahead.filter((s) => s.state === "planned");
   const myListeners = sortForAttention(listeners.filter((l) => l.linked));
 
@@ -78,7 +75,7 @@ async function Home() {
           </Link>
         }
       >
-        <div className="grid grid-cols-3 gap-2 md:max-w-2xl md:gap-3">
+        <div className="grid grid-cols-2 gap-2 md:max-w-md md:gap-3">
           <StatTile
             size="sm"
             label="Ca đã đi"
@@ -86,7 +83,6 @@ async function Home() {
             sub={weekDelta(mine.doneThisWeek, mine.doneLastWeek)}
             href="/thong-ke"
           />
-          <StatTile size="sm" label="Mảnh đã chia sẻ" value={mine.lessonsThisWeek} sub="trong tuần" href="/thong-ke" />
           <StatTile size="sm" label="Ca đã hẹn" value={mine.plannedAhead} sub="từ giờ trở đi" href="/lich" />
         </div>
         {isLeader && (
@@ -129,21 +125,11 @@ async function Home() {
             )}
           </Section>
 
-          {late.length > 0 && (
-            <Section title={`Cần ghi kết quả (${late.length})`}>
-              <div className="flex flex-col gap-2">
-                {late.map((s) => (
-                  <SessionCard key={s.id} s={s} now={now} note="Bấm để ghi kết quả" />
-                ))}
-              </div>
-            </Section>
-          )}
-
           <Section
             title={`Đã hẹn · ${PLANNED_DAYS} ngày tới`}
             aside={
               <span className="flex gap-4 text-sm font-medium text-accent">
-                <Link href="/ca/hen">Hẹn ca +</Link>
+                <Link href="/ca/hen">Đặt lịch +</Link>
                 <Link href="/lich">Mở lịch →</Link>
               </span>
             }
@@ -157,11 +143,8 @@ async function Home() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <div className="hidden grid-cols-2 gap-3 md:grid">
-            <ButtonLink href="/ca/ghi">Ghi ca vừa xong</ButtonLink>
-            <ButtonLink href="/ca/hen" variant="secondary">
-              Hẹn ca
-            </ButtonLink>
+          <div className="hidden md:grid">
+            <ButtonLink href="/ca/hen">Đặt lịch trudo</ButtonLink>
           </div>
 
           <Section
@@ -181,7 +164,7 @@ async function Home() {
         </div>
       </div>
 
-      <Fab href="/ca/ghi">Ghi ca</Fab>
+      <Fab href="/ca/hen">Đặt lịch trudo</Fab>
     </>
   );
 }
@@ -235,11 +218,6 @@ async function AreaLine({ user, now }: { user: SessionUser; now: Date }) {
       <span>
         <b className="tabular-nums text-ink">{active}</b>/{st.members.length} người có đi
       </span>
-      {st.overdue > 0 && (
-        <span className="text-late">
-          ▲ <b className="tabular-nums">{st.overdue}</b> chưa ghi KQ
-        </span>
-      )}
       {st.stalled.length > 0 && (
         <span className="text-late">
           ▲ <b className="tabular-nums">{st.stalled.length}</b> chiên cần quan tâm

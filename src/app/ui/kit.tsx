@@ -129,7 +129,6 @@ export function Loading() {
 export const PHASE_TONE: Record<SessionPhase, { text: string; bg: string; soft: string; border: string }> = {
   live: { text: "text-live", bg: "bg-live", soft: "bg-live/10", border: "border-live" },
   upcoming: { text: "text-plan", bg: "bg-plan", soft: "bg-plan/10", border: "border-plan" },
-  overdue: { text: "text-late", bg: "bg-late", soft: "bg-late/10", border: "border-late" },
   done: { text: "text-done", bg: "bg-done", soft: "bg-done/10", border: "border-done" },
   cancelled: { text: "text-muted", bg: "bg-muted", soft: "bg-line/40", border: "border-line" },
 };
@@ -144,13 +143,12 @@ export function LiveDot({ className = "h-2.5 w-2.5" }: { className?: string }) {
   );
 }
 
-// Shape carries the phase too (not color alone): ring = planned, dot = done, diamond = overdue, dash = cancelled.
+// Shape carries the phase too (not color alone): ring = not started, dot = completed, dash = cancelled.
 export function PhaseMark({ phase }: { phase: SessionPhase }) {
   if (phase === "live") return <LiveDot className="h-2 w-2" />;
   const shape = {
     upcoming: "h-2 w-2 rounded-full border-[1.5px] border-plan",
     done: "h-2 w-2 rounded-full bg-done",
-    overdue: "h-[7px] w-[7px] rotate-45 rounded-[1px] bg-late",
     cancelled: "h-[2px] w-2 rounded-full bg-muted",
   }[phase];
   return <span className={`inline-block shrink-0 ${shape}`} aria-hidden />;

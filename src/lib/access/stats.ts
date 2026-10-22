@@ -1,23 +1,22 @@
 import "server-only";
-import { and, count, eq, gte, lt, max, sql } from "drizzle-orm";
+import { and, count, eq, gte, max, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { listenerLinks, sessionLessons, sessionMembers, sessions, users } from "@/db/schema";
-import { addDays, dayKey, dayStart, LESSONS, SESSION_LIVE_MS, weekStart, type DisplayStatus } from "@/lib/domain";
+import { listenerLinks, sessionMembers, sessions, users } from "@/db/schema";
+import { addDays, dayKey, dayStart, LESSONS, weekStart, type DisplayStatus } from "@/lib/domain";
 import type { SessionUser } from "./auth";
 import { forbiddenError, notFoundError } from "./errors";
 import { listListenersLinkedTo, type ListenerSummary } from "./listeners";
+import { completedAt } from "./phase";
 import { stalledListeners, type StalledItem } from "./stalled";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 export const TREND_WEEKS = 8;
-export const ACTIVITY_DAYS = 30;
 
 export type WeeklyCount = { weekStart: string; done: number };
 
 export type MemberActivity = {
   id: string;
   name: string;
-  doneThisWeek: number; // done sessions joined since Monday
+  doneThisWeek: number; // completed sessions joined since Monday
   doneLastWeek: number;
   linkedListeners: number;
   lastDoneAt: Date | null;
@@ -27,8 +26,6 @@ export type AreaStats = {
   doneThisWeek: number;
   doneLastWeek: number;
   plannedAhead: number;
-  overdue: number; // planned sessions whose live window has passed without a result
-  lessonsRecent: number; // lesson shares in done sessions of the last ACTIVITY_DAYS
   weekly: WeeklyCount[]; // oldest first, current week last
   statusCounts: Record<DisplayStatus, number>;
   lessonReach: { lesson: number; listeners: number }[]; // open listeners who heard each lesson
@@ -37,12 +34,11 @@ export type AreaStats = {
   members: MemberActivity[];
 };
 
-// One person's own numbers: sessions they went on, lessons shared in them, what they have planned.
+// One person's own numbers: sessions they went on and what they have planned.
 export type PersonalStats = {
   doneThisWeek: number;
   doneLastWeek: number;
   weekly: WeeklyCount[]; // oldest first, current week last
-  lessonsThisWeek: number;
   plannedAhead: number;
   linkedListeners: number;
 };
@@ -77,21 +73,15 @@ function bucketWeekly(dates: Date[], thisWeek: string): WeeklyCount[] {
 }
 
 async function personalStats(userId: string, areaId: string, now: Date): Promise<PersonalStats> {
-  const { thisWeek, thisWeekFrom, trendFrom } = weekWindow(now);
+  const { thisWeek, trendFrom } = weekWindow(now);
   const mine = and(eq(sessionMembers.userId, userId), eq(sessions.areaId, areaId));
 
-  const [doneRows, [lessons], [planned], [linked]] = await Promise.all([
+  const [doneRows, [planned], [linked]] = await Promise.all([
     db
       .select({ startsAt: sessions.startsAt })
       .from(sessionMembers)
       .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
-      .where(and(mine, eq(sessions.state, "done"), gte(sessions.startsAt, trendFrom))),
-    db
-      .select({ n: count() })
-      .from(sessionLessons)
-      .innerJoin(sessions, eq(sessions.id, sessionLessons.sessionId))
-      .innerJoin(sessionMembers, eq(sessionMembers.sessionId, sessions.id))
-      .where(and(mine, eq(sessions.state, "done"), gte(sessions.startsAt, thisWeekFrom))),
+      .where(and(mine, completedAt(now), gte(sessions.startsAt, trendFrom))),
     db
       .select({ n: count() })
       .from(sessionMembers)
@@ -108,7 +98,6 @@ async function personalStats(userId: string, areaId: string, now: Date): Promise
     doneThisWeek: weekly[TREND_WEEKS - 1].done,
     doneLastWeek: weekly[TREND_WEEKS - 2].done,
     weekly,
-    lessonsThisWeek: lessons.n,
     plannedAhead: planned.n,
     linkedListeners: linked.n,
   };
@@ -138,29 +127,17 @@ export async function memberStats(viewer: SessionUser, memberId: string, now = n
 export async function areaStats(viewer: SessionUser, now = new Date()): Promise<AreaStats> {
   if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng xem được thống kê.");
   const { thisWeek, thisWeekFrom, lastWeekFrom, trendFrom } = weekWindow(now);
-  const recentFrom = new Date(now.getTime() - ACTIVITY_DAYS * DAY_MS);
   const inArea = eq(sessions.areaId, viewer.areaId);
 
-  const [doneRows, [planned], [overdue], [lessons], memberRows, activityRows, linkRows, listeners] = await Promise.all([
+  const [doneRows, [planned], memberRows, activityRows, linkRows, listeners] = await Promise.all([
     db
       .select({ startsAt: sessions.startsAt })
       .from(sessions)
-      .where(and(inArea, eq(sessions.state, "done"), gte(sessions.startsAt, trendFrom))),
+      .where(and(inArea, completedAt(now), gte(sessions.startsAt, trendFrom))),
     db
       .select({ n: count() })
       .from(sessions)
       .where(and(inArea, eq(sessions.state, "planned"), gte(sessions.startsAt, now))),
-    db
-      .select({ n: count() })
-      .from(sessions)
-      .where(
-        and(inArea, eq(sessions.state, "planned"), lt(sessions.startsAt, new Date(now.getTime() - SESSION_LIVE_MS))),
-      ),
-    db
-      .select({ n: count() })
-      .from(sessionLessons)
-      .innerJoin(sessions, eq(sessions.id, sessionLessons.sessionId))
-      .where(and(inArea, eq(sessions.state, "done"), gte(sessions.startsAt, recentFrom))),
     db
       .select({ id: users.id, name: users.name })
       .from(users)
@@ -178,7 +155,7 @@ export async function areaStats(viewer: SessionUser, now = new Date()): Promise<
       })
       .from(sessionMembers)
       .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
-      .where(and(inArea, eq(sessions.state, "done")))
+      .where(and(inArea, completedAt(now)))
       .groupBy(sessionMembers.userId),
     db
       .select({ userId: listenerLinks.userId, n: count() })
@@ -218,8 +195,6 @@ export async function areaStats(viewer: SessionUser, now = new Date()): Promise<
     doneThisWeek: weekly[TREND_WEEKS - 1].done,
     doneLastWeek: weekly[TREND_WEEKS - 2].done,
     plannedAhead: planned.n,
-    overdue: overdue.n,
-    lessonsRecent: lessons.n,
     weekly,
     statusCounts,
     lessonReach: LESSONS.map((lesson) => ({

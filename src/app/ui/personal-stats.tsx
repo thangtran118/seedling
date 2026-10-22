@@ -21,9 +21,8 @@ export function PersonalStatsView({
 }) {
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <StatTile label="Ca đã đi tuần này" value={st.doneThisWeek} sub={weekDelta(st.doneThisWeek, st.doneLastWeek)} />
-        <StatTile label="Mảnh đã chia sẻ" value={st.lessonsThisWeek} sub="tuần này" />
         <StatTile label="Ca đã hẹn" value={st.plannedAhead} sub="từ giờ trở đi" />
         <StatTile label="Chiên đồng hành" value={st.linkedListeners} />
       </div>

@@ -4,7 +4,7 @@ import { BottomNav, SideNav } from "@/app/ui/nav";
 
 // Authenticated screens. The session is read inside a Suspense boundary (Cache Components), and every page
 // still calls requireUser() itself: a layout does not re-run on navigation, so it is not an auth check.
-// Bottom padding on phones clears the tab bar and the floating "Ghi ca" button.
+// Bottom padding on phones clears the tab bar and the floating "Đặt lịch trudo" button.
 // Width: dashboards (home, calendar, stats, lists) use the full column; form screens narrow it in their own layout.
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (

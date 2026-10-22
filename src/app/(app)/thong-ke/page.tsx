@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { requireUser } from "@/lib/access/current-user";
 import type { SessionUser } from "@/lib/access/auth";
 import { listListeners } from "@/lib/access/listeners";
-import { ACTIVITY_DAYS, areaStats, myStats, TREND_WEEKS, type MemberActivity } from "@/lib/access/stats";
+import { areaStats, myStats, TREND_WEEKS, type MemberActivity } from "@/lib/access/stats";
 import { addDays, daysBetween, STALLED_AFTER_DAYS, STATUS_LABEL, type DisplayStatus } from "@/lib/domain";
 import { BarList, ColumnChart } from "@/app/ui/charts";
 import { Card, Empty, LessonDots, Loading, PageHeader, Section, StatTile, StatusBadge, weekDelta } from "@/app/ui/kit";
@@ -52,7 +52,7 @@ async function AreaStatsView({ user, now }: { user: SessionUser; now: Date }) {
 
   return (
     <>
-      <p className="-mt-3 text-sm text-muted">Chỉ đếm ca đã đi. Không chứa thông tin riêng tư.</p>
+      <p className="-mt-3 text-sm text-muted">Chỉ đếm ca đã hoàn thành. Không chứa thông tin riêng tư.</p>
 
       <Section
         title={`Thành viên tuần này · ${activeMembers}/${st.members.length} có đi ca`}
@@ -65,17 +65,9 @@ async function AreaStatsView({ user, now }: { user: SessionUser; now: Date }) {
         <MemberWeekList members={st.members} now={now} />
       </Section>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatTile label="Ca đã đi tuần này" value={st.doneThisWeek} sub={weekDelta(st.doneThisWeek, st.doneLastWeek)} />
         <StatTile label="Ca đang hẹn" value={st.plannedAhead} sub="từ giờ trở đi" href="/lich" />
-        <StatTile
-          label="Chưa ghi kết quả"
-          value={st.overdue}
-          alert={st.overdue > 0}
-          sub="ca đã qua giờ, chưa hoàn thành"
-          href="/lich"
-        />
-        <StatTile label={`Mảnh đã chia sẻ`} value={st.lessonsRecent} sub={`${ACTIVITY_DAYS} ngày qua`} />
         <StatTile
           label="Chiên cần quan tâm"
           value={st.stalled.length}
@@ -163,7 +155,6 @@ async function AreaStatsView({ user, now }: { user: SessionUser; now: Date }) {
           )}
         </Card>
       </div>
-
     </>
   );
 }
@@ -185,7 +176,9 @@ function MemberWeekList({ members, now }: { members: MemberActivity[]; now: Date
               href={`/thong-ke/thanh-vien/${m.id}`}
               className="flex items-center gap-3 px-3.5 py-3 transition-colors hover:bg-sunken/60 active:bg-line/30"
             >
-              <span className="w-9 shrink-0 text-center text-2xl font-bold tabular-nums text-ink">{m.doneThisWeek}</span>
+              <span className="w-9 shrink-0 text-center text-2xl font-bold tabular-nums text-ink">
+                {m.doneThisWeek}
+              </span>
               <span className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="truncate font-semibold text-ink">{m.name}</span>
                 <span className="h-1.5 rounded-full bg-sunken" aria-hidden>

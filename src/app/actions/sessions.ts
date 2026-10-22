@@ -6,11 +6,9 @@ import * as z from "zod";
 import { requireUser } from "@/lib/access/current-user";
 import {
   cancelSession,
-  completeSession,
   joinSession,
   leaveSession,
   planSession,
-  recordDoneSession,
   updateSession,
   type DuplicateInfo,
 } from "@/lib/access/sessions";
@@ -27,8 +25,6 @@ const text = z
 const payloadSchema = z.object({
   listenerIds: z.array(id).default([]),
   memberIds: z.array(id).default([]),
-  lessons: z.record(id, z.array(z.number().int())).default({}),
-  meetOnly: z.boolean().default(false),
   startsAt: z.string(),
   locationLabel: text,
   locationDetail: text,
@@ -49,15 +45,6 @@ function parse(input: unknown) {
 
 const BAD = { ok: false, error: "Dữ liệu không hợp lệ." } as const;
 
-export async function recordSessionAction(input: SessionPayload): Promise<SessionFormResult> {
-  const user = await requireUser();
-  const data = parse(input);
-  if (!data) return BAD;
-  const result = await guard(() => recordDoneSession(user, data));
-  if (isActionError(result) || !result.ok) return result;
-  redirect(`/ca/${result.id}?da-luu=1`);
-}
-
 export async function planSessionAction(input: SessionPayload): Promise<SessionFormResult> {
   const user = await requireUser();
   const data = parse(input);
@@ -65,15 +52,6 @@ export async function planSessionAction(input: SessionPayload): Promise<SessionF
   const result = await guard(() => planSession(user, data));
   if (isActionError(result) || !result.ok) return result;
   redirect(`/ca/${result.id}?da-luu=1`);
-}
-
-export async function completeSessionAction(sessionId: string, input: SessionPayload): Promise<SessionFormResult> {
-  const user = await requireUser();
-  const data = parse(input);
-  if (!data || !id.safeParse(sessionId).success) return BAD;
-  const result = await guard(() => completeSession(user, sessionId, data));
-  if (isActionError(result) || !result.ok) return result;
-  redirect(`/ca/${sessionId}?da-luu=1`);
 }
 
 export async function updateSessionAction(sessionId: string, input: SessionPayload): Promise<SessionFormResult> {

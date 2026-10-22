@@ -5,7 +5,7 @@ import { cancelSessionAction, joinSessionAction, leaveSessionAction } from "@/ap
 import { requireUser } from "@/lib/access/current-user";
 import { listenersForSession, type SessionListener } from "@/lib/access/listeners";
 import { getSessionDetail } from "@/lib/access/sessions";
-import { dayKey, formatDayLong, formatTime, sessionPhase, type SessionState } from "@/lib/domain";
+import { dayKey, formatDayLong, formatTime, isOpenPhase, sessionPhase } from "@/lib/domain";
 import { ActionForm, PendingButton } from "@/app/ui/action-form";
 import {
   ButtonLink,
@@ -54,7 +54,8 @@ async function Detail({
     <>
       <PageHeader title="Ca trudo" back="/" />
       {saved && <Notice tone="success">Đã lưu.</Notice>}
-      {s.state === "cancelled" && <Notice tone="warn">Ca này đã bị hủy. Dữ liệu vẫn được lưu lại.</Notice>}
+      {phase === "cancelled" && <Notice tone="warn">Ca này đã bị hủy. Dữ liệu vẫn được lưu trong lịch sử.</Notice>}
+      {phase === "done" && <Notice tone="success">Ca đã hoàn thành và được lưu vào lịch sử của chiên.</Notice>}
 
       <div className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <p className={`text-xl font-bold capitalize text-ink ${s.state === "cancelled" ? "line-through" : ""}`}>
@@ -66,7 +67,7 @@ async function Detail({
       <Section title={s.listeners.length > 1 ? `Chiên (${s.listeners.length})` : "Chiên"}>
         <div className={`grid grid-cols-1 gap-3 ${people.length > 1 ? "md:grid-cols-2" : ""}`}>
           {people.map((l) => (
-            <ListenerPanel key={l.id} l={l} sharedHere={s.lessons[l.id] ?? []} state={s.state} />
+            <ListenerPanel key={l.id} l={l} />
           ))}
         </div>
       </Section>
@@ -123,7 +124,6 @@ async function Detail({
       </Section>
 
       <div className="flex flex-col gap-3">
-        {s.canComplete && s.isPast && <ButtonLink href={`/ca/${s.id}/sua?hoan-thanh=1`}>Ghi kết quả ca này</ButtonLink>}
         {s.canJoin && (
           <ActionForm action={joinSessionAction} hidden={{ sessionId: s.id }}>
             <PendingButton className="h-12 w-full rounded-lg bg-accent font-semibold text-on-accent">
@@ -131,31 +131,33 @@ async function Detail({
             </PendingButton>
           </ActionForm>
         )}
-        {s.state === "planned" && s.isMember && s.members.length > 1 && (
+        {isOpenPhase(phase) && s.isMember && s.members.length > 1 && (
           <ActionForm action={leaveSessionAction} hidden={{ sessionId: s.id }}>
             <PendingButton className="h-11 w-full rounded-lg border border-line text-ink">Rời ca</PendingButton>
           </ActionForm>
         )}
-        {s.canEdit && (
-          <div className="grid grid-cols-2 gap-3">
-            <ButtonLink href={`/ca/${s.id}/sua`} variant="secondary">
-              Sửa
-            </ButtonLink>
-            <ActionForm
-              action={cancelSessionAction}
-              hidden={{ sessionId: s.id }}
-              confirm="Hủy ca này? Dữ liệu vẫn được lưu lại."
-            >
-              <PendingButton className="h-12 w-full rounded-lg border border-line text-danger">Hủy ca</PendingButton>
-            </ActionForm>
+        {(s.canEdit || s.canCancel) && (
+          <div className={`grid gap-3 ${s.canEdit && s.canCancel ? "grid-cols-2" : "grid-cols-1"}`}>
+            {s.canEdit && (
+              <ButtonLink href={`/ca/${s.id}/sua`} variant="secondary">
+                Sửa
+              </ButtonLink>
+            )}
+            {s.canCancel && (
+              <ActionForm
+                action={cancelSessionAction}
+                hidden={{ sessionId: s.id }}
+                confirm="Hủy ca này? Ca vẫn được lưu trong lịch sử với trạng thái “Đã hủy”."
+              >
+                <PendingButton className="h-12 w-full rounded-lg border border-line text-danger">Hủy ca</PendingButton>
+              </ActionForm>
+            )}
           </div>
         )}
-        {s.state === "planned" && s.isPast && s.canEdit && !s.canComplete && (
-          <p className="text-xs text-muted">Cần đồng hành với tất cả chiên trong ca mới ghi kết quả được.</p>
-        )}
-        {!s.canEdit && s.state !== "cancelled" && (
+        {isOpenPhase(phase) && (
           <p className="text-xs text-muted">
-            Chỉ người đồng hành với chiên trong ca mới sửa, hủy hoặc ghi kết quả được.
+            Ca tự hoàn thành sau 2 tiếng kể từ giờ bắt đầu nếu không bị hủy. Chỉ người tạo ca mới hủy được
+            {s.canEdit ? "" : "; người đồng hành với chiên trong ca mới sửa được"}.
           </p>
         )}
       </div>
@@ -171,7 +173,7 @@ const CONTACTS = [
   ["hometown", "Quê quán"],
 ] as const;
 
-function ListenerPanel({ l, sharedHere, state }: { l: SessionListener; sharedHere: number[]; state: SessionState }) {
+function ListenerPanel({ l }: { l: SessionListener }) {
   const p = l.private;
   const contacts = p ? CONTACTS.filter(([k]) => p[k]) : [];
   return (
@@ -192,18 +194,6 @@ function ListenerPanel({ l, sharedHere, state }: { l: SessionListener; sharedHer
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 text-sm">
-        <span className="text-muted">Ca này:</span>
-        {sharedHere.length ? (
-          sharedHere.map((n) => (
-            <span key={n} className="rounded-md bg-done/15 px-2 py-0.5 text-sm font-semibold text-done">
-              Mảnh {n}
-            </span>
-          ))
-        ) : (
-          <span className="text-ink">{state === "done" ? "Chỉ gặp gỡ" : "Chưa có kết quả"}</span>
-        )}
-      </div>
       <LessonDots heard={l.lessons} />
 
       {p ? (
