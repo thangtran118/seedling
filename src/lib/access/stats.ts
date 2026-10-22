@@ -1,11 +1,16 @@
 import "server-only";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { listenerLinks, listeners, users } from "@/db/schema";
-import { addMonths, dayKey, dayStart } from "@/lib/domain";
+import { listenerLinks, listenerPrivate, listeners, sessionMembers, sessions, users } from "@/db/schema";
+import { addDays, addMonths, dayKey, dayStart, sundayWeekStart, WEEKLY_SESSION_GOAL } from "@/lib/domain";
 import type { SessionUser } from "./auth";
 import { forbiddenError, notFoundError } from "./errors";
 import { listListenersLinkedTo, type ListenerSummary } from "./listeners";
+import { completedAt } from "./phase";
+
+// Every number here is a count: no private field is read, so nothing needs a pii_access_log row. A "buổi trudo" is
+// a completed session the person was in; weeks run Sunday to Saturday. A "chiên mới" is a listener added this
+// month with at least one way to reach them (phone, Facebook, Zalo or Telegram).
 
 // Listener numbers at the end of one month (Vietnam calendar). The current month counts up to now.
 export type MonthStats = {
@@ -16,29 +21,44 @@ export type MonthStats = {
   baptized: number; // of `total`, those marked báptem by the end of the month
 };
 
-export type ListenerStats = {
-  current: MonthStats;
-  previous: MonthStats;
-  history: MonthStats[]; // every month since the first listener, newest first; empty when there is none
+// The stats page numbers, for one person or the whole area.
+export type Overview = {
+  sessionsThisWeek: number;
+  newThisMonth: number; // added this month, with contact info
+  sharedTruth: number; // listeners who have reached mảnh 1
+  baptized: number;
+  total: number;
 };
 
-export type MemberStatsRow = {
-  id: string;
-  name: string;
-  role: SessionUser["role"];
-  current: MonthStats;
+export type PersonalStats = Overview & {
+  streakWeeks: number; // consecutive weeks, up to this one, with at least WEEKLY_SESSION_GOAL sessions
 };
 
-export type AreaStats = { area: ListenerStats; members: MemberStatsRow[] };
-
-export type MemberStats = ListenerStats & {
+export type MemberStats = PersonalStats & {
   member: { id: string; name: string; role: SessionUser["role"] };
   listeners: ListenerSummary[];
 };
 
+// One row of the area's member table, for this month.
+export type MemberMonthRow = {
+  id: string;
+  name: string;
+  role: SessionUser["role"];
+  sessions: number;
+  newListeners: number;
+  baptized: number;
+};
+
+export type AreaStats = {
+  overview: Overview;
+  current: MonthStats; // this month's listener numbers (home page)
+};
+
 type Milestones = { createdAt: Date; firstLessonAt: Date | null; baptizedAt: Date | null };
+type ListenerRow = Milestones & { lessonsReached: number; manualStatus: string; hasContact: boolean };
 
 const monthKey = (d: Date) => dayKey(d).slice(0, 7);
+const monthFrom = (now: Date) => dayStart(`${monthKey(now)}-01`);
 
 function monthStats(rows: Milestones[], month: string): MonthStats {
   const from = dayStart(`${month}-01`).getTime();
@@ -54,18 +74,29 @@ function monthStats(rows: Milestones[], month: string): MonthStats {
   };
 }
 
-function summarize(rows: Milestones[], now: Date): ListenerStats {
-  const thisMonth = monthKey(now);
-  const history: MonthStats[] = [];
-  if (rows.length) {
-    const first = monthKey(new Date(Math.min(...rows.map((r) => r.createdAt.getTime()))));
-    for (let m = thisMonth; m >= first; m = addMonths(m, -1)) history.push(monthStats(rows, m));
-  }
+function listenerNumbers(rows: ListenerRow[], now: Date) {
+  const from = monthFrom(now).getTime();
   return {
-    current: history[0] ?? monthStats(rows, thisMonth),
-    previous: history[1] ?? monthStats(rows, addMonths(thisMonth, -1)),
-    history,
+    newThisMonth: rows.filter((r) => r.hasContact && r.createdAt.getTime() >= from).length,
+    sharedTruth: rows.filter((r) => r.lessonsReached > 0).length,
+    baptized: rows.filter((r) => r.manualStatus === "baptem").length,
+    total: rows.length,
   };
+}
+
+// This week counts toward the streak once it reaches the goal; until then the streak is the run of full weeks just
+// before it, so it does not drop to 0 every Sunday.
+function weekNumbers(sessionDates: Date[], now: Date) {
+  const perWeek = new Map<string, number>();
+  for (const d of sessionDates) {
+    const w = sundayWeekStart(dayKey(d));
+    perWeek.set(w, (perWeek.get(w) ?? 0) + 1);
+  }
+  const thisWeek = sundayWeekStart(dayKey(now));
+  const reached = (w: string) => (perWeek.get(w) ?? 0) >= WEEKLY_SESSION_GOAL;
+  let streakWeeks = reached(thisWeek) ? 1 : 0;
+  for (let w = addDays(thisWeek, -7); reached(w); w = addDays(w, -7)) streakWeeks += 1;
+  return { sessionsThisWeek: perWeek.get(thisWeek) ?? 0, streakWeeks };
 }
 
 const milestoneCols = {
@@ -74,18 +105,55 @@ const milestoneCols = {
   baptizedAt: listeners.baptizedAt,
 };
 
+const listenerCols = {
+  ...milestoneCols,
+  lessonsReached: listeners.lessonsReached,
+  manualStatus: listeners.manualStatus,
+  // Only whether a contact exists, never its value.
+  hasContact: sql<boolean>`coalesce(${or(
+    isNotNull(listenerPrivate.phone),
+    isNotNull(listenerPrivate.facebook),
+    isNotNull(listenerPrivate.zalo),
+    isNotNull(listenerPrivate.telegram),
+  )}, false)`,
+};
+
 // The listeners one person walks with (người đồng hành), as counted in their own stats.
-async function linkedMilestones(userId: string, areaId: string) {
+function linkedListeners(userIds: string[], areaId: string) {
   return db
-    .select(milestoneCols)
+    .select({ userId: listenerLinks.userId, ...listenerCols })
     .from(listenerLinks)
     .innerJoin(listeners, eq(listeners.id, listenerLinks.listenerId))
-    .where(and(eq(listenerLinks.userId, userId), eq(listeners.areaId, areaId)));
+    .leftJoin(listenerPrivate, eq(listenerPrivate.listenerId, listeners.id))
+    .where(and(inArray(listenerLinks.userId, userIds), eq(listeners.areaId, areaId)));
 }
 
-// Everyone's own numbers (home page and the stats tab). Counts only, no private fields.
-export async function myStats(viewer: SessionUser, now = new Date()): Promise<ListenerStats> {
-  return summarize(await linkedMilestones(viewer.id, viewer.areaId), now);
+async function personalStats(userId: string, areaId: string, now: Date): Promise<PersonalStats> {
+  const [rows, dates] = await Promise.all([
+    linkedListeners([userId], areaId),
+    db
+      .select({ startsAt: sessions.startsAt })
+      .from(sessionMembers)
+      .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
+      .where(and(eq(sessionMembers.userId, userId), eq(sessions.areaId, areaId), completedAt(now))),
+  ]);
+  return {
+    ...weekNumbers(
+      dates.map((d) => d.startsAt),
+      now,
+    ),
+    ...listenerNumbers(rows, now),
+  };
+}
+
+// Everyone's own numbers (the stats page).
+export function myStats(viewer: SessionUser, now = new Date()): Promise<PersonalStats> {
+  return personalStats(viewer.id, viewer.areaId, now);
+}
+
+// This month's listener numbers for the listeners the viewer walks with (home page).
+export async function myMonthStats(viewer: SessionUser, now = new Date()): Promise<MonthStats> {
+  return monthStats(await linkedListeners([viewer.id], viewer.areaId), monthKey(now));
 }
 
 // Leader: one member of the area, with the listeners they walk with.
@@ -96,51 +164,79 @@ export async function memberStats(viewer: SessionUser, memberId: string, now = n
     .from(users)
     .where(eq(users.id, memberId));
   if (!member || member.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy thành viên.");
-  const [rows, linked] = await Promise.all([
-    linkedMilestones(member.id, viewer.areaId),
+  const [stats, linked] = await Promise.all([
+    personalStats(member.id, viewer.areaId, now),
     listListenersLinkedTo(viewer, member.id),
   ]);
-  return {
-    ...summarize(rows, now),
-    member: { id: member.id, name: member.name, role: member.role },
-    listeners: linked,
-  };
+  return { ...stats, member: { id: member.id, name: member.name, role: member.role }, listeners: linked };
 }
 
-// Leader dashboard: the whole area, and each active member's own numbers. Counts only, no private fields.
+// Everyone in the area, this month: sessions gone on, new listeners, listeners baptized. Visible to every member;
+// sorted by báptem, then sessions, then new listeners.
+export async function memberMonthTable(viewer: SessionUser, now = new Date()): Promise<MemberMonthRow[]> {
+  const from = monthFrom(now);
+  const memberRows = await db
+    .select({ id: users.id, name: users.name, role: users.role })
+    .from(users)
+    .where(and(eq(users.areaId, viewer.areaId), eq(users.active, true)));
+  if (!memberRows.length) return [];
+  const ids = memberRows.map((m) => m.id);
+  const [sessionRows, links] = await Promise.all([
+    db
+      .select({ userId: sessionMembers.userId })
+      .from(sessionMembers)
+      .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
+      .where(
+        and(
+          inArray(sessionMembers.userId, ids),
+          eq(sessions.areaId, viewer.areaId),
+          completedAt(now),
+          gte(sessions.startsAt, from),
+        ),
+      ),
+    linkedListeners(ids, viewer.areaId),
+  ]);
+  return memberRows
+    .map((m) => {
+      const mine = links.filter((l) => l.userId === m.id);
+      return {
+        ...m,
+        sessions: sessionRows.filter((s) => s.userId === m.id).length,
+        newListeners: mine.filter((l) => l.hasContact && l.createdAt >= from).length,
+        baptized: mine.filter((l) => l.baptizedAt !== null && l.baptizedAt >= from).length,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.baptized - a.baptized ||
+        b.sessions - a.sessions ||
+        b.newListeners - a.newListeners ||
+        a.name.localeCompare(b.name, "vi"),
+    );
+}
+
+// Leader: the whole area — this week's sessions and its listeners.
 export async function areaStats(viewer: SessionUser, now = new Date()): Promise<AreaStats> {
   if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng xem được thống kê.");
-  const [areaRows, memberRows] = await Promise.all([
-    db.select(milestoneCols).from(listeners).where(eq(listeners.areaId, viewer.areaId)),
+  const [rows, dates] = await Promise.all([
     db
-      .select({ id: users.id, name: users.name, role: users.role })
-      .from(users)
-      .where(and(eq(users.areaId, viewer.areaId), eq(users.active, true))),
+      .select(listenerCols)
+      .from(listeners)
+      .leftJoin(listenerPrivate, eq(listenerPrivate.listenerId, listeners.id))
+      .where(eq(listeners.areaId, viewer.areaId)),
+    db
+      .select({ startsAt: sessions.startsAt })
+      .from(sessions)
+      .where(and(eq(sessions.areaId, viewer.areaId), completedAt(now))),
   ]);
-  const links = memberRows.length
-    ? await db
-        .select({ userId: listenerLinks.userId, ...milestoneCols })
-        .from(listenerLinks)
-        .innerJoin(listeners, eq(listeners.id, listenerLinks.listenerId))
-        .where(
-          and(
-            eq(listeners.areaId, viewer.areaId),
-            inArray(
-              listenerLinks.userId,
-              memberRows.map((m) => m.id),
-            ),
-          ),
-        )
-    : [];
-  const thisMonth = monthKey(now);
-  const members = memberRows
-    .map((m) => ({
-      ...m,
-      current: monthStats(
-        links.filter((l) => l.userId === m.id),
-        thisMonth,
-      ),
-    }))
-    .sort((a, b) => b.current.total - a.current.total || a.name.localeCompare(b.name, "vi"));
-  return { area: summarize(areaRows, now), members };
+  return {
+    overview: {
+      sessionsThisWeek: weekNumbers(
+        dates.map((d) => d.startsAt),
+        now,
+      ).sessionsThisWeek,
+      ...listenerNumbers(rows, now),
+    },
+    current: monthStats(rows, monthKey(now)),
+  };
 }

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/access/current-user";
 import { listListeners, type ListenerSummary } from "@/lib/access/listeners";
 import { listAreaSessionsBetween, type SessionListItem } from "@/lib/access/sessions";
-import { areaStats, myStats } from "@/lib/access/stats";
+import { areaStats, myMonthStats } from "@/lib/access/stats";
 import type { SessionUser } from "@/lib/access/auth";
 import {
   addDays,
@@ -47,7 +47,7 @@ async function Home() {
   const [todays, ahead, mine, listeners] = await Promise.all([
     listAreaSessionsBetween(user, from, dayStart(tomorrow)),
     listAreaSessionsBetween(user, dayStart(tomorrow), dayStart(addDays(tomorrow, PLANNED_DAYS))),
-    myStats(user, now),
+    myMonthStats(user, now),
     listListeners(user),
   ]);
   const isLeader = user.role === "area_leader";
@@ -76,7 +76,7 @@ async function Home() {
         }
       >
         <div className="md:max-w-4xl">
-          <StatsTiles st={mine} size="sm" />
+          <StatsTiles m={mine} size="sm" />
         </div>
       </Section>
 
@@ -188,11 +188,11 @@ function PlannedByDay({ sessions, tomorrow, now }: { sessions: SessionListItem[]
 
 // Leader: the area's numbers in the same blocks as their own; the full dashboard is on /thong-ke.
 async function AreaMonth({ user, now }: { user: SessionUser; now: Date }) {
-  const { area } = await areaStats(user, now);
+  const { current } = await areaStats(user, now);
   return (
     <Section title="Khu vực tháng này">
       <div className="md:max-w-4xl">
-        <StatsTiles st={area} size="sm" />
+        <StatsTiles m={current} size="sm" />
       </div>
     </Section>
   );

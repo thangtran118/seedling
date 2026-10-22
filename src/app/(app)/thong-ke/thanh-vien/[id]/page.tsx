@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/access/current-user";
 import { memberStats } from "@/lib/access/stats";
 import { Empty, Loading, PageHeader, Section } from "@/app/ui/kit";
 import { ListenerRows } from "@/app/ui/listener-card";
-import { StatsHistory, StatsTiles } from "@/app/ui/listener-stats";
+import { OverviewTiles } from "@/app/ui/listener-stats";
 import { loadOr404 } from "@/app/ui/load";
 
 export const metadata: Metadata = { title: "Thống kê thành viên · Seedling" };
@@ -31,10 +31,7 @@ async function Detail({ params }: { params: PageProps<"/thong-ke/thanh-vien/[id]
       <p className="-mt-3 text-sm text-muted">
         {st.member.role === "area_leader" ? "Khu vực trưởng" : "Thánh đồ"} · chiên người này đồng hành
       </p>
-      <StatsTiles st={st} />
-      <Section title="Lịch sử theo tháng">
-        <StatsHistory history={st.history} />
-      </Section>
+      <OverviewTiles st={st} />
       <Section title={`Chiên đồng hành (${st.listeners.length})`}>
         {st.listeners.length ? (
           <ListenerRows items={st.listeners} now={now} />

@@ -131,6 +131,10 @@ export const addDays = (key: string, n: number) =>
 // Monday = 0 … Sunday = 6
 export const weekdayIndex = (key: string) => (new Date(`${key}T00:00:00Z`).getUTCDay() + 6) % 7;
 export const weekStart = (key: string) => addDays(key, -weekdayIndex(key));
+// Stats weeks run Sunday to Saturday (Sunday is the first day), unlike the Monday-first calendar.
+export const sundayWeekStart = (key: string) => addDays(key, -((weekdayIndex(key) + 1) % 7));
+// "Đạt" a week: at least this many sessions (buổi trudo) in it.
+export const WEEKLY_SESSION_GOAL = 8;
 
 export const parseDayKey = (v: string | undefined) =>
   v && DAY_KEY.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) ? v : null;
