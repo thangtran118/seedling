@@ -15,8 +15,9 @@ services:
       test: ["CMD-SHELL", "pg_isready -U seedling"]
       interval: 5s
       retries: 10
+    restart: unless-stopped
 
-  # Production app: `docker compose --profile prod up -d --build`. Put a TLS reverse proxy in front of it.
+  # Production (see DEPLOY.md): `docker compose --profile prod up -d --build` runs the app behind Caddy (TLS).
   app:
     profiles: ["prod"]
     build: .
@@ -29,5 +30,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  caddy:
+    profiles: ["prod"]
+    image: caddy:2-alpine
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
 volumes:
   seedling-db:
+  caddy-data:
+  caddy-config:

@@ -34,12 +34,7 @@ pnpm admin reset-leader --phone 09xxxxxxxx                                  # m�
 pnpm admin access-log --days 7                                              # ai đã xem dữ liệu riêng tư
 ```
 
-Production trên VPS (Docker, Postgres cùng máy; đặt reverse proxy TLS phía trước):
-
-```bash
-POSTGRES_PASSWORD=... docker compose --profile prod up -d --build
-docker compose --profile prod exec app pnpm admin bootstrap --area "..." --name "..." --phone 09...
-```
+Production (AWS EC2, Docker, Caddy lo HTTPS): xem **[DEPLOY.md](DEPLOY.md)**.
 
 ## Cấu trúc
 
