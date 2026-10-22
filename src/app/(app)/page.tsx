@@ -22,7 +22,7 @@ import { AutoRefresh } from "@/app/ui/auto-refresh";
 import { ButtonLink, Empty, Fab, Loading, Section } from "@/app/ui/kit";
 import { ListenerRows } from "@/app/ui/listener-card";
 import { StatsTiles } from "@/app/ui/listener-stats";
-import { LiveSessionCard, SessionCard } from "@/app/ui/session-card";
+import { SessionCard } from "@/app/ui/session-card";
 
 // Phone first: one column in order of what people open the app for — my week, what is happening today,
 // what is planned next, and where each of my chiên stands. Wide screens split it in two columns.
@@ -52,7 +52,6 @@ async function Home() {
   ]);
   const isLeader = user.role === "area_leader";
   const live = todays.filter((s) => sessionPhase(s.state, s.startsAt, now) === "live");
-  const rest = todays.filter((s) => sessionPhase(s.state, s.startsAt, now) !== "live");
   const next = todays.find((s) => sessionPhase(s.state, s.startsAt, now) === "upcoming");
   const planned = ahead.filter((s) => s.state === "planned");
   const myListeners = sortForAttention(listeners.filter((l) => l.linked));
@@ -89,20 +88,10 @@ async function Home() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <div className="flex flex-col gap-6">
-          <Section
-            title={live.length ? `Hôm nay · ${live.length} đang diễn ra` : "Hôm nay"}
-            aside={<span className="text-xs text-muted">tự cập nhật mỗi phút</span>}
-          >
-            {live.length > 0 && (
-              <div className={`grid gap-3 ${live.length > 1 ? "md:grid-cols-2" : ""}`}>
-                {live.map((s) => (
-                  <LiveSessionCard key={s.id} s={s} now={now} />
-                ))}
-              </div>
-            )}
-            {rest.length > 0 && (
+          <Section title={live.length ? `Hôm nay · ${live.length} đang diễn ra` : "Hôm nay"}>
+            {todays.length > 0 && (
               <div className="flex flex-col gap-2">
-                {rest.map((s) => (
+                {todays.map((s) => (
                   <SessionCard key={s.id} s={s} now={now} showDate={false} />
                 ))}
               </div>
