@@ -309,8 +309,8 @@ export function SessionForm(props: SessionFormProps) {
             className="h-12 rounded-lg border border-line bg-surface px-3 text-base text-ink"
           />
           <span className="text-xs text-muted">
-            Cả khu vực đều thấy ô này. Không ghi địa chỉ nhà hay nơi làm việc của chiên; địa chỉ cụ thể ghi ở “Địa
-            chỉ chi tiết” (chỉ thành viên ca và người đồng hành thấy).
+            Cả khu vực đều thấy ô này. Không ghi địa chỉ nhà hay nơi làm việc của chiên; địa chỉ cụ thể ghi ở “Địa chỉ
+            chi tiết” (chỉ thành viên ca và người đồng hành thấy).
           </span>
         </label>
         {!showMore ? (

@@ -59,7 +59,7 @@ docker compose --profile prod exec app pnpm admin bootstrap --area "..." --name 
 | Xem SĐT, MXH, quê, ghi chú | có (ghi log) | không | có (ghi log) |
 | Xem lịch sử nghe (ngày, mảnh từng ca, ai đi) | có (ghi log) | chỉ khi đã/đang đi ca cùng chiên (ghi log) | có (ghi log) |
 | Ghi ca vừa xong / ghi kết quả ca | phải đồng hành với tất cả chiên trong ca | không | chỉ khi được liên kết |
-| Hẹn ca | có | có | có |
+| Hẹn ca | phải đồng hành với tất cả chiên trong ca | không | chỉ khi được liên kết |
 | Sửa, hủy ca; sửa chiên | có | không | chỉ khi được liên kết |
 | Xóa ca | không ai (chỉ hủy, dữ liệu giữ lại) | | |
 | Tham gia ca | chỉ ca đang hẹn, không giới hạn số người | | |

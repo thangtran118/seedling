@@ -127,7 +127,11 @@ export async function lessonsHeardFor(
     )
     .groupBy(sessionLessons.listenerId);
   for (const r of rows) {
-    if (r.latest) result.set(r.listenerId, Array.from({ length: r.latest }, (_, i) => i + 1));
+    if (r.latest)
+      result.set(
+        r.listenerId,
+        Array.from({ length: r.latest }, (_, i) => i + 1),
+      );
   }
   return result;
 }
@@ -212,6 +216,25 @@ export async function listListeners(viewer: SessionUser, opts: { query?: string 
     .orderBy(asc(listeners.name));
   const summaries = await summarize(viewer, rows);
   return summaries.sort((a, b) => Number(b.linked) - Number(a.linked));
+}
+
+// Leader view of one member's listeners (the member stats page). Same summary shape as the list.
+export async function listListenersLinkedTo(viewer: SessionUser, userId: string): Promise<ListenerSummary[]> {
+  if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng xem được.");
+  const rows = await db
+    .select()
+    .from(listeners)
+    .where(
+      and(
+        eq(listeners.areaId, viewer.areaId),
+        inArray(
+          listeners.id,
+          db.select({ id: listenerLinks.listenerId }).from(listenerLinks).where(eq(listenerLinks.userId, userId)),
+        ),
+      ),
+    )
+    .orderBy(asc(listeners.name));
+  return summarize(viewer, rows);
 }
 
 export type SessionListener = ListenerSummary & { private: ListenerPrivateFields | null };

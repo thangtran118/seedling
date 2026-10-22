@@ -67,13 +67,15 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
         <LessonDots heard={l.lessons} size="md" />
       </section>
 
-      {/* Recording is for linked users only; anyone may plan a session for others to join. */}
-      <div className={`grid gap-3 ${l.canEdit ? "grid-cols-2" : "grid-cols-1"}`}>
-        {l.canEdit && <ButtonLink href={`/ca/ghi?nguoi-nghe=${l.id}`}>Ghi ca</ButtonLink>}
-        <ButtonLink href={`/ca/hen?nguoi-nghe=${l.id}`} variant="secondary">
-          Hẹn ca
-        </ButtonLink>
-      </div>
+      {/* Recording and planning are for direct companions (người đồng hành) only, the area leader included. */}
+      {l.canEdit && (
+        <div className="grid grid-cols-2 gap-3">
+          <ButtonLink href={`/ca/ghi?nguoi-nghe=${l.id}`}>Ghi ca</ButtonLink>
+          <ButtonLink href={`/ca/hen?nguoi-nghe=${l.id}`} variant="secondary">
+            Hẹn ca
+          </ButtonLink>
+        </div>
+      )}
 
       {l.private && (
         <Section title="Thông tin riêng tư">
@@ -181,9 +183,7 @@ function History({ history }: { history: ListenerDetail["history"] }) {
   if (history === null) {
     return (
       <Section title="Lịch sử nghe">
-        <Notice>
-          Lịch sử nghe chỉ hiện với người đồng hành, người đã đi ca cùng chiên này và khu vực trưởng.
-        </Notice>
+        <Notice>Lịch sử nghe chỉ hiện với người đồng hành, người đã đi ca cùng chiên này và khu vực trưởng.</Notice>
       </Section>
     );
   }

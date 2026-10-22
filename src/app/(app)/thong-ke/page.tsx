@@ -1,19 +1,21 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { requireUser } from "@/lib/access/current-user";
-import { ACTIVITY_DAYS, areaStats, TREND_WEEKS } from "@/lib/access/stats";
+import type { SessionUser } from "@/lib/access/auth";
+import { listListeners } from "@/lib/access/listeners";
+import { ACTIVITY_DAYS, areaStats, myStats, TREND_WEEKS, type MemberActivity } from "@/lib/access/stats";
 import { addDays, daysBetween, STALLED_AFTER_DAYS, STATUS_LABEL, type DisplayStatus } from "@/lib/domain";
 import { BarList, ColumnChart } from "@/app/ui/charts";
-import { Card, Empty, LessonDots, Loading, PageHeader, Section, StatTile, StatusBadge } from "@/app/ui/kit";
+import { Card, Empty, LessonDots, Loading, PageHeader, Section, StatTile, StatusBadge, weekDelta } from "@/app/ui/kit";
+import { PersonalStatsView } from "@/app/ui/personal-stats";
 
-export const metadata: Metadata = { title: "Thống kê khu vực · Seedling" };
+export const metadata: Metadata = { title: "Thống kê · Seedling" };
 
 export default function StatsPage() {
   return (
     <>
-      <PageHeader title="Thống kê khu vực" />
+      <PageHeader title="Thống kê" />
       <Suspense fallback={<Loading />}>
         <Stats />
       </Suspense>
@@ -21,30 +23,50 @@ export default function StatsPage() {
   );
 }
 
+// Members see their own numbers; the area leader sees the area and each member.
+async function Stats() {
+  const user = await requireUser();
+  const now = new Date();
+  return user.role === "area_leader" ? <AreaStatsView user={user} now={now} /> : <MyStats user={user} now={now} />;
+}
+
+async function MyStats({ user, now }: { user: SessionUser; now: Date }) {
+  const [st, listeners] = await Promise.all([myStats(user, now), listListeners(user)]);
+  return (
+    <PersonalStatsView
+      st={st}
+      listeners={listeners.filter((l) => l.linked)}
+      now={now}
+      emptyListeners="Bạn chưa đồng hành với chiên nào."
+    />
+  );
+}
+
 const STATUS_ORDER: DisplayStatus[] = ["moi_quen", "goi_mo", "dang_hoc", "baptem", "tu_choi"];
 const ddmm = (key: string) => `${key.slice(8)}/${key.slice(5, 7)}`;
 
-async function Stats() {
-  const user = await requireUser();
-  if (user.role !== "area_leader") notFound();
-  const now = new Date();
-  const st = await areaStats(user, now);
-  const delta = st.doneThisWeek - st.doneLastWeek;
-  const activeMembers = st.members.filter((m) => m.doneRecent > 0).length;
+async function AreaStatsView({ user, now }: { user: SessionUser; now: Date }) {
+  const [st, mine] = await Promise.all([areaStats(user, now), myStats(user, now)]);
+  const activeMembers = st.members.filter((m) => m.doneThisWeek > 0).length;
   const totalListeners = STATUS_ORDER.reduce((n, s) => n + st.statusCounts[s], 0);
 
   return (
     <>
-      <p className="-mt-3 text-sm text-muted">
-        Chỉ đếm ca đã đi. Số liệu dùng cho khu vực trưởng và nhóm trưởng; không chứa thông tin riêng tư.
-      </p>
+      <p className="-mt-3 text-sm text-muted">Chỉ đếm ca đã đi. Không chứa thông tin riêng tư.</p>
+
+      <Section
+        title={`Thành viên tuần này · ${activeMembers}/${st.members.length} có đi ca`}
+        aside={
+          <span className="text-xs text-muted">
+            Của tôi: <b className="tabular-nums text-ink">{mine.doneThisWeek}</b> ca
+          </span>
+        }
+      >
+        <MemberWeekList members={st.members} now={now} />
+      </Section>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <StatTile
-          label="Ca đã đi tuần này"
-          value={st.doneThisWeek}
-          sub={delta === 0 ? "bằng tuần trước" : `${delta > 0 ? "+" : ""}${delta} so với tuần trước`}
-        />
+        <StatTile label="Ca đã đi tuần này" value={st.doneThisWeek} sub={weekDelta(st.doneThisWeek, st.doneLastWeek)} />
         <StatTile label="Ca đang hẹn" value={st.plannedAhead} sub="từ giờ trở đi" href="/lich" />
         <StatTile
           label="Chưa ghi kết quả"
@@ -69,7 +91,7 @@ async function Stats() {
               <span className="text-lg font-semibold text-muted">/{st.members.length}</span>
             </>
           }
-          sub={`${ACTIVITY_DAYS} ngày qua`}
+          sub="tuần này"
         />
       </div>
 
@@ -142,49 +164,54 @@ async function Stats() {
         </Card>
       </div>
 
-      <Section title={`Hoạt động thánh đồ · ${ACTIVITY_DAYS} ngày qua`}>
-        <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
-          <table className="w-full text-sm">
-            <thead className="bg-sunken text-left text-xs text-muted">
-              <tr>
-                <th className="px-3 py-2 sm:px-4 font-semibold">Thánh đồ</th>
-                <th className="px-3 py-2 sm:px-4 text-right font-semibold">Ca đã đi</th>
-                <th className="px-3 py-2 sm:px-4 text-right font-semibold">Đồng hành</th>
-                <th className="px-3 py-2 sm:px-4 text-right font-semibold">Gần nhất</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {st.members.map((m) => {
-                const days = m.lastDoneAt ? daysBetween(new Date(m.lastDoneAt), now) : null;
-                const quiet = days === null || days > STALLED_AFTER_DAYS;
-                return (
-                  <tr key={m.id}>
-                    <td className="px-3 py-2 sm:px-4.5 font-medium text-ink">{m.name}</td>
-                    <td className="px-3 py-2 sm:px-4.5 text-right tabular-nums text-ink">
-                      <span className="inline-flex items-center justify-end gap-2">
-                        <span
-                          className="hidden h-1.5 rounded-full bg-done/70 sm:inline-block"
-                          style={{ width: `${Math.min(m.doneRecent, 12) * 6}px` }}
-                          aria-hidden
-                        />
-                        {m.doneRecent}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 sm:px-4.5 text-right tabular-nums text-ink">{m.linkedListeners}</td>
-                    <td className={`px-3 py-2 sm:px-4.5 text-right ${quiet ? "text-late" : "text-muted"}`}>
-                      {days === null
-                        ? "▲ chưa đi ca nào"
-                        : days === 0
-                          ? "hôm nay"
-                          : `${quiet ? "▲ " : ""}${days} ngày trước`}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Section>
     </>
+  );
+}
+
+// Members who went quiet: nothing this week and no done session for two weeks or more.
+const QUIET_AFTER_DAYS = 14;
+
+function MemberWeekList({ members, now }: { members: MemberActivity[]; now: Date }) {
+  if (members.length === 0) return <Empty>Khu vực chưa có thành viên.</Empty>;
+  const max = Math.max(1, ...members.map((m) => m.doneThisWeek));
+  return (
+    <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface md:grid md:grid-cols-2 md:divide-y-0">
+      {members.map((m) => {
+        const days = m.lastDoneAt ? daysBetween(new Date(m.lastDoneAt), now) : null;
+        const quiet = m.doneThisWeek === 0 && (days === null || days >= QUIET_AFTER_DAYS);
+        return (
+          <li key={m.id} className="md:border-b md:border-line md:odd:border-r">
+            <Link
+              href={`/thong-ke/thanh-vien/${m.id}`}
+              className="flex items-center gap-3 px-3.5 py-3 transition-colors hover:bg-sunken/60 active:bg-line/30"
+            >
+              <span className="w-9 shrink-0 text-center text-2xl font-bold tabular-nums text-ink">{m.doneThisWeek}</span>
+              <span className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="truncate font-semibold text-ink">{m.name}</span>
+                <span className="h-1.5 rounded-full bg-sunken" aria-hidden>
+                  <span
+                    className="block h-full rounded-full bg-done"
+                    style={{ width: `${(m.doneThisWeek / max) * 100}%` }}
+                  />
+                </span>
+                <span className="truncate text-xs text-muted">
+                  tuần trước {m.doneLastWeek} · {m.linkedListeners} chiên ·{" "}
+                  <span className={quiet ? "text-late" : ""}>
+                    {days === null
+                      ? "▲ chưa đi ca nào"
+                      : days === 0
+                        ? "đi hôm nay"
+                        : `${quiet ? "▲ " : ""}${days} ngày trước`}
+                  </span>
+                </span>
+              </span>
+              <span className="text-muted" aria-hidden>
+                ›
+              </span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

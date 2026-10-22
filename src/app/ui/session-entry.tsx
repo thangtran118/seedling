@@ -26,14 +26,14 @@ export async function SessionEntry({
   const user = await requireUser();
   const preselect = firstParam((await searchParams)["nguoi-nghe"]);
   const [all, members] = await Promise.all([listListeners(user), listAreaMembers(user)]);
-  // Recording writes into a listener's history, so only the viewer's own listeners can be picked.
-  const listeners = mode === "record" ? all.filter((l) => l.linked) : all;
+  // Recording and planning are for direct companions only: only the viewer's own listeners can be picked.
+  const listeners = all.filter((l) => l.linked);
   const selected = listeners.find((l) => l.id === preselect);
-  if (mode === "record" && listeners.length === 0) {
+  if (listeners.length === 0) {
     return (
       <Empty>
-        Bạn chưa đồng hành với chiên nào nên chưa ghi ca được. Người đồng hành hoặc khu vực trưởng có thể thêm bạn vào
-        phần “Người đồng hành” của chiên đó.
+        Bạn chưa đồng hành với chiên nào nên chưa {mode === "record" ? "ghi" : "hẹn"} ca được. Người đồng hành hoặc khu
+        vực trưởng có thể thêm bạn vào phần “Người đồng hành” của chiên đó.
       </Empty>
     );
   }

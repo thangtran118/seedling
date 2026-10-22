@@ -183,23 +183,34 @@ export function PhaseLegend({ phases }: { phases: SessionPhase[] }) {
 
 // ---------- numbers ----------
 
+// "+2 so với tuần trước" under a weekly count.
+export function weekDelta(thisWeek: number, lastWeek: number) {
+  const d = thisWeek - lastWeek;
+  return d === 0 ? "bằng tuần trước" : `${d > 0 ? "+" : ""}${d} so với tuần trước`;
+}
+
 export function StatTile({
   label,
   value,
   sub,
   href,
   alert,
+  size = "md",
 }: {
   label: string;
   value: ReactNode;
   sub?: ReactNode;
   href?: string;
   alert?: boolean; // the number needs attention: a warning glyph, never color alone
+  size?: "sm" | "md";
 }) {
+  const sm = size === "sm";
   const body = (
     <>
-      <p className="text-xs font-medium text-muted">{label}</p>
-      <p className="mt-1 flex items-baseline gap-1.5 text-3xl font-bold tabular-nums tracking-tight text-ink">
+      <p className={`font-medium text-muted ${sm ? "text-[11px] leading-tight" : "text-xs"}`}>{label}</p>
+      <p
+        className={`flex items-baseline gap-1.5 font-bold tabular-nums tracking-tight text-ink ${sm ? "mt-0.5 text-2xl" : "mt-1 text-3xl"}`}
+      >
         {value}
         {alert && (
           <span className="text-base text-late" aria-label="cần chú ý">
@@ -207,15 +218,32 @@ export function StatTile({
           </span>
         )}
       </p>
-      {sub && <p className="mt-0.5 text-xs text-muted">{sub}</p>}
+      {sub && <p className={`mt-0.5 text-muted ${sm ? "text-[11px] leading-tight" : "text-xs"}`}>{sub}</p>}
     </>
   );
-  const cls = `rounded-2xl border bg-surface p-3.5 ${alert ? "border-late/50" : "border-line"}`;
+  const cls = `rounded-2xl border bg-surface ${sm ? "p-3" : "p-3.5"} ${alert ? "border-late/50" : "border-line"}`;
   return href ? (
-    <Link href={href} className={`${cls} block transition-colors hover:border-muted/50`}>
+    <Link href={href} className={`${cls} block transition-colors hover:border-muted/50 active:bg-line/30`}>
       {body}
     </Link>
   ) : (
     <div className={cls}>{body}</div>
+  );
+}
+
+// ---------- phone actions ----------
+
+// The one action that must stay under the thumb on phones; hidden from md up, where it sits in the page.
+export function Fab({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 flex h-14 items-center gap-2 rounded-full bg-accent pr-5 pl-4 text-base font-semibold text-on-accent shadow-lg shadow-black/20 active:scale-[0.98] md:hidden"
+    >
+      <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden>
+        <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+      {children}
+    </Link>
   );
 }

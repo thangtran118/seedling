@@ -12,7 +12,7 @@ import {
   sessions,
   users,
 } from "@/db/schema";
-import { DONE_FUTURE_TOLERANCE_MS, LESSONS, TIME_ZONE, type SessionState } from "@/lib/domain";
+import { DONE_FUTURE_TOLERANCE_MS, LESSONS, nextLesson, TIME_ZONE, type SessionState } from "@/lib/domain";
 import type { SessionUser } from "./auth";
 import { historyVisibleListenerIds, lessonsHeardFor } from "./listeners";
 import { forbiddenError, invalidError, notFoundError } from "./errors";
@@ -26,7 +26,9 @@ export type SessionListItem = {
   startsAt: Date;
   state: SessionState;
   locationLabel: string | null;
-  listeners: { id: string; name: string }[];
+  // nextLesson: the mảnh to share next, on planned sessions only and only where the viewer may see the
+  // listener's history (undefined otherwise; null when all seven are heard).
+  listeners: { id: string; name: string; nextLesson?: number | null }[];
   members: { id: string; name: string }[];
   isMember: boolean;
   canJoin: boolean; // planned and the viewer is not in it yet (no member cap)
@@ -221,10 +223,10 @@ async function linkedCount(userId: string, listenerIds: string[]) {
   return rows.length;
 }
 
-// Recording lessons ("ghi ca", "ghi kết quả") writes into each listener's history, so it needs a link to all of them.
-async function requireLinkedToAll(viewer: SessionUser, listenerIds: string[]) {
+// Recording lessons ("ghi ca", "ghi kết quả") and planning ("hẹn ca") need a link to every listener in the session.
+async function requireLinkedToAll(viewer: SessionUser, listenerIds: string[], action = "ghi ca") {
   if ((await linkedCount(viewer.id, listenerIds)) !== listenerIds.length) {
-    throw forbiddenError("Chỉ người đồng hành với tất cả chiên trong ca mới được ghi ca.");
+    throw forbiddenError(`Chỉ người đồng hành với tất cả chiên trong ca mới được ${action}.`);
   }
 }
 
@@ -274,6 +276,7 @@ export async function recordDoneSession(
 }
 
 // "Hẹn ca": planned session with the planner as first member; others join from the area calendar.
+// Like recording, only users linked to every listener in it may plan (the area leader has no special right).
 export async function planSession(
   viewer: SessionUser,
   input: { listenerIds: string[] } & DetailsInput & { confirmDistinct?: boolean },
@@ -285,6 +288,7 @@ export async function planSession(
     { listenerIds: input.listenerIds, memberIds: [viewer.id], lessons: {}, meetOnly: false },
     { requireLessons: false },
   );
+  await requireLinkedToAll(viewer, c.listenerIds, "hẹn ca");
   if (!input.confirmDistinct) {
     const duplicates = await findSameDay(c.listenerIds, details.startsAt, { states: ["planned", "done"] });
     if (duplicates.length) return { ok: false, duplicates };
@@ -433,6 +437,10 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
       .innerJoin(users, eq(users.id, sessionMembers.userId))
       .where(inArray(sessionMembers.sessionId, ids)),
   ]);
+  const plannedIds = new Set(rows.filter((r) => r.state === "planned").map((r) => r.id));
+  const progressIds = [...new Set(ls.filter((l) => plannedIds.has(l.sessionId)).map((l) => l.id))];
+  const visible = await historyVisibleListenerIds(viewer, progressIds);
+  const heard = await lessonsHeardFor([...visible]);
   return rows.map((r) => {
     const members = ms.filter((m) => m.sessionId === r.id).map(({ id, name }) => ({ id, name }));
     const isMember = members.some((m) => m.id === viewer.id);
@@ -441,7 +449,11 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
       startsAt: r.startsAt,
       state: r.state,
       locationLabel: r.locationLabel,
-      listeners: ls.filter((l) => l.sessionId === r.id).map(({ id, name }) => ({ id, name })),
+      listeners: ls
+        .filter((l) => l.sessionId === r.id)
+        .map(({ id, name }) =>
+          plannedIds.has(r.id) && visible.has(id) ? { id, name, nextLesson: nextLesson(heard.get(id) ?? []) } : { id, name },
+        ),
       members,
       isMember,
       canJoin: r.state === "planned" && !isMember,

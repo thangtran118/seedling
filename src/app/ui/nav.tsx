@@ -30,12 +30,8 @@ function useItems(isLeader: boolean) {
     { href: "/", label: "Hôm nay", icon: "home" },
     { href: "/lich", label: "Lịch", icon: "calendar" },
     { href: "/nguoi-nghe", label: "Chiên", icon: "people" },
-    ...(isLeader
-      ? [
-          { href: "/thong-ke", label: "Thống kê", icon: "chart", also: ["/chung-lai"] },
-          { href: "/thanh-vien", label: "Thành viên", icon: "team" },
-        ]
-      : []),
+    { href: "/thong-ke", label: "Thống kê", icon: "chart", also: ["/chung-lai"] },
+    ...(isLeader ? [{ href: "/thanh-vien", label: "Thành viên", icon: "team" }] : []),
   ];
   const active = (item: Item) =>
     item.href === "/"

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { LESSONS, lessonProgress, type DisplayStatus } from "@/lib/domain";
+import { daysBetween, LESSONS, lessonProgress, STALLED_AFTER_DAYS, type DisplayStatus } from "@/lib/domain";
 import { LessonDots, StatusBadge } from "./kit";
 
 type ListenerLike = {
@@ -112,5 +112,65 @@ export function ListenerCard({
         {footer}
       </div>
     </Link>
+  );
+}
+
+// One line per listener for dense lists (home, stats): name, the seven mảnh, and what needs doing next.
+export function ListenerRow({
+  l,
+  now = new Date(),
+}: {
+  l: ListenerLike & { lastDoneAt?: Date | null };
+  now?: Date;
+}) {
+  const { next } = lessonProgress(l.lessons);
+  const days = l.lastDoneAt ? daysBetween(new Date(l.lastDoneAt), now) : null;
+  const stalled = !closed(l.status) && (days === null || days > STALLED_AFTER_DAYS);
+  return (
+    <Link
+      href={`/nguoi-nghe/${l.id}`}
+      className="flex items-center gap-3 px-3.5 py-3 transition-colors hover:bg-sunken/60 active:bg-line/30"
+    >
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-semibold text-ink">{l.name}</span>
+          {closed(l.status) && <StatusBadge status={l.status} />}
+        </div>
+        <LessonDots heard={l.lessons} />
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
+        {closed(l.status) ? (
+          <span className="text-xs text-muted">
+            {l.lessons.length}/{LESSONS.length} mảnh
+          </span>
+        ) : next !== null ? (
+          <span className="text-sm text-muted">
+            kế tiếp <b className="text-base tabular-nums text-ink">M{next}</b>
+          </span>
+        ) : (
+          <span className="text-sm font-semibold text-done">Đã nghe đủ</span>
+        )}
+        {!closed(l.status) && (
+          <span className={`text-xs ${stalled ? "text-late" : "text-muted"}`}>
+            {days === null
+              ? `${stalled ? "▲ " : ""}chưa có ca`
+              : days === 0
+                ? "gặp hôm nay"
+                : `${stalled ? "▲ " : ""}${days} ngày trước`}
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+// Rows in one bordered card, the list form used on the home and stats pages.
+export function ListenerRows({ items, now }: { items: (ListenerLike & { lastDoneAt?: Date | null })[]; now?: Date }) {
+  return (
+    <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
+      {items.map((l) => (
+        <ListenerRow key={l.id} l={l} now={now} />
+      ))}
+    </div>
   );
 }

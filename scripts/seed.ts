@@ -36,7 +36,7 @@ async function main() {
         passwordHash,
         areaId: area.id,
         mustChangePassword: false,
-        consentedAt: new Date(),
+        consentedAt: nfew Date(),
       })),
     )
     .returning();
