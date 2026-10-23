@@ -19,7 +19,7 @@ import {
 } from "@/lib/domain";
 import { AccountMenu } from "@/app/ui/account-menu";
 import { AutoRefresh } from "@/app/ui/auto-refresh";
-import { ButtonLink, Empty, Fab, Loading, Section } from "@/app/ui/kit";
+import { Empty, Fab, Loading, Section } from "@/app/ui/kit";
 import { ListenerRows } from "@/app/ui/listener-card";
 import { StatsTiles } from "@/app/ui/listener-stats";
 import { SessionCard } from "@/app/ui/session-card";
@@ -65,6 +65,13 @@ async function Home() {
           <h1 className="truncate text-2xl font-bold tracking-tight text-ink">Chào {user.name}</h1>
         </div>
         <AccountMenu name={user.name} role={isLeader ? "Khu vực trưởng" : "Thánh đồ"} />
+        {/* md+: the phone's floating button and account menu are hidden; same spot and style as on /lich. */}
+        <Link
+          href="/ca/hen"
+          className="hidden shrink-0 rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-on-accent md:block"
+        >
+          + Đặt lịch trudo
+        </Link>
       </header>
 
       <Section
@@ -127,10 +134,6 @@ async function Home() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <div className="hidden md:grid">
-            <ButtonLink href="/ca/hen">Đặt lịch trudo</ButtonLink>
-          </div>
-
           <Section
             title={myListeners.length ? `Chiên của tôi (${myListeners.length})` : "Chiên của tôi"}
             aside={
