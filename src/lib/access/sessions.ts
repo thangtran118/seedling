@@ -25,6 +25,7 @@ export type SessionListItem = {
   startsAt: Date;
   state: SessionState;
   locationLabel: string | null;
+  mapUrl: string | null; // Google Maps link to the meeting place, area-visible like the place name
   // nextLesson: the mảnh to share next, on upcoming / in-progress sessions only and only where the viewer may see
   // the listener's history (undefined otherwise; null when all seven are heard).
   listeners: { id: string; name: string; nextLesson?: number | null }[];
@@ -37,7 +38,7 @@ export type SessionDetail = SessionListItem & {
   createdBy: { id: string; name: string };
   canEdit: boolean; // upcoming or in progress, and linked to at least one listener of the session
   canCancel: boolean; // upcoming or in progress, and the viewer created it
-  private: { locationDetail: string | null; summary: string | null } | null;
+  private: { summary: string | null } | null;
 };
 
 export type DuplicateInfo = {
@@ -58,7 +59,7 @@ export type CompositionInput = {
 export type DetailsInput = {
   startsAt: Date;
   locationLabel: string | null;
-  locationDetail: string | null;
+  mapUrl: string | null;
   summary: string | null;
 };
 
@@ -72,12 +73,34 @@ function cleanText(value: string | null, maxLen: number, label: string) {
   return t || null;
 }
 
+const MAP_URL_ERROR = "Link Google Maps không hợp lệ. Trên Google Maps bấm Chia sẻ → Sao chép đường liên kết.";
+
+// Only Google Maps links: the whole area sees and opens this link, so it must not point anywhere else.
+function cleanMapUrl(value: string | null) {
+  const t = cleanText(value, 500, "Link Google Maps");
+  if (!t) return null;
+  let url: URL;
+  try {
+    url = new URL(t);
+  } catch {
+    throw invalidError(MAP_URL_ERROR);
+  }
+  const host = url.hostname;
+  const isMaps =
+    host === "maps.app.goo.gl" ||
+    (host === "goo.gl" && url.pathname.startsWith("/maps")) ||
+    /^maps\.google\.com(\.vn)?$/.test(host) ||
+    (/^(www\.)?google\.com(\.vn)?$/.test(host) && url.pathname.startsWith("/maps"));
+  if (url.protocol !== "https:" || !isMaps) throw invalidError(MAP_URL_ERROR);
+  return url.toString();
+}
+
 function validateDetails(input: DetailsInput) {
   if (Number.isNaN(input.startsAt.getTime())) throw invalidError("Thời gian không hợp lệ.");
   return {
     startsAt: input.startsAt,
-    locationLabel: cleanText(input.locationLabel, 40, "Khu vực gặp"),
-    locationDetail: cleanText(input.locationDetail, 200, "Địa chỉ chi tiết"),
+    locationLabel: cleanText(input.locationLabel, 80, "Nơi gặp"),
+    mapUrl: cleanMapUrl(input.mapUrl),
     summary: cleanText(input.summary, 2000, "Tóm tắt"),
   };
 }
@@ -140,7 +163,7 @@ async function writeComposition(tx: Tx, sessionId: string, c: CompositionInput) 
   await tx.insert(sessionMembers).values(c.memberIds.map((userId) => ({ sessionId, userId })));
 }
 
-async function writePrivate(tx: Tx, sessionId: string, p: { locationDetail: string | null; summary: string | null }) {
+async function writePrivate(tx: Tx, sessionId: string, p: { summary: string | null }) {
   await tx
     .insert(sessionPrivate)
     .values({ sessionId, ...p })
@@ -208,7 +231,7 @@ export async function planSession(
   input: { listenerIds: string[] } & DetailsInput & { confirmDistinct?: boolean },
 ): Promise<WriteResult> {
   const details = validateDetails(input);
-  if (!details.locationLabel) throw invalidError("Cần nhập khu vực gặp để người khác biết mà tham gia.");
+  if (!details.locationLabel) throw invalidError("Cần nhập nơi gặp để người khác biết mà tham gia.");
   const c = await validateComposition(viewer, { listenerIds: input.listenerIds, memberIds: [viewer.id] });
   await requireLinkedToAll(viewer, c.listenerIds);
   if (!input.confirmDistinct) {
@@ -223,11 +246,12 @@ export async function planSession(
         createdBy: viewer.id,
         startsAt: details.startsAt,
         locationLabel: details.locationLabel,
+        mapUrl: details.mapUrl,
         state: "planned",
       })
       .returning({ id: sessions.id });
     await writeComposition(tx, row.id, c);
-    await writePrivate(tx, row.id, { locationDetail: details.locationDetail, summary: null });
+    await writePrivate(tx, row.id, { summary: null });
     return row.id;
   });
   return { ok: true, id };
@@ -268,10 +292,10 @@ export async function updateSession(
   await db.transaction(async (tx) => {
     await tx
       .update(sessions)
-      .set({ startsAt: details.startsAt, locationLabel: details.locationLabel })
+      .set({ startsAt: details.startsAt, locationLabel: details.locationLabel, mapUrl: details.mapUrl })
       .where(eq(sessions.id, sessionId));
     await writeComposition(tx, sessionId, c);
-    await writePrivate(tx, sessionId, details);
+    await writePrivate(tx, sessionId, { summary: details.summary });
   });
 }
 
@@ -317,6 +341,7 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
       startsAt: r.startsAt,
       state: r.state,
       locationLabel: r.locationLabel,
+      mapUrl: r.mapUrl,
       listeners: ls
         .filter((l) => l.sessionId === r.id)
         .map(({ id, name }) =>
@@ -344,7 +369,7 @@ export async function getSessionDetail(viewer: SessionUser, sessionId: string): 
   let priv: SessionDetail["private"] = null;
   if (canSeePrivate) {
     const [p] = await db.select().from(sessionPrivate).where(eq(sessionPrivate.sessionId, sessionId));
-    priv = { locationDetail: p?.locationDetail ?? null, summary: p?.summary ?? null };
+    priv = { summary: p?.summary ?? null };
     await db.insert(piiAccessLog).values({ viewerId: viewer.id, sessionId, reason: "view_session_private" });
   }
   return {

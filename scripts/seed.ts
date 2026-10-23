@@ -142,6 +142,7 @@ async function main() {
         createdBy: h.members[0].id,
         startsAt: daysAgo(h.ago),
         locationLabel: "Quán cafe Kết 3",
+        mapUrl: "https://www.google.com/maps/search/?api=1&query=cafe+Ho+Chi+Minh",
         state: "planned",
       })
       .returning();
@@ -149,7 +150,6 @@ async function main() {
     await db.insert(s.sessionListeners).values({ sessionId: session.id, listenerId: listeners[h.listener].id });
     await db.insert(s.sessionPrivate).values({
       sessionId: session.id,
-      locationDetail: "Địa chỉ giả 123",
       summary: "Tóm tắt giả",
     });
   }

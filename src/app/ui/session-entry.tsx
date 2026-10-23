@@ -47,7 +47,7 @@ export async function SessionEntry({
         memberIds: [],
         startsAt: defaultStartsAt(),
         locationLabel: "",
-        locationDetail: "",
+        mapUrl: "",
         summary: "",
       }}
     />

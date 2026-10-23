@@ -116,7 +116,8 @@ export const sessions = pgTable("sessions", {
     .notNull()
     .references(() => users.id),
   startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
-  locationLabel: varchar("location_label", { length: 40 }),
+  locationLabel: varchar("location_label", { length: 80 }),
+  mapUrl: varchar("map_url", { length: 500 }),
   state: sessionStateEnum("state").notNull(),
   cancelledBy: uuid("cancelled_by").references(() => users.id),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
@@ -179,6 +180,5 @@ export const sessionPrivate = privateSchema.table("session_private", {
   sessionId: uuid("session_id")
     .primaryKey()
     .references(() => sessions.id),
-  locationDetail: varchar("location_detail", { length: 200 }),
   summary: text("summary"),
 });

@@ -20,7 +20,7 @@ export type SessionFormProps = {
     memberIds: string[];
     startsAt: string; // datetime-local value, Vietnam time
     locationLabel: string;
-    locationDetail: string;
+    mapUrl: string;
     summary: string;
   };
   submit: (payload: SessionPayload) => Promise<SessionFormResult>;
@@ -40,9 +40,9 @@ export function SessionForm(props: SessionFormProps) {
   const [memberIds, setMemberIds] = useState<string[]>(initial.memberIds);
   const [startsAt, setStartsAt] = useState(initial.startsAt);
   const [locationLabel, setLocationLabel] = useState(initial.locationLabel);
-  const [locationDetail, setLocationDetail] = useState(initial.locationDetail);
+  const [mapUrl, setMapUrl] = useState(initial.mapUrl);
   const [summary, setSummary] = useState(initial.summary);
-  const [showMore, setShowMore] = useState(Boolean(initial.locationDetail || initial.summary));
+  const [showSummary, setShowSummary] = useState(Boolean(initial.summary));
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<
@@ -79,7 +79,7 @@ export function SessionForm(props: SessionFormProps) {
         memberIds,
         startsAt,
         locationLabel,
-        locationDetail,
+        mapUrl,
         summary,
         confirmDistinct,
       });
@@ -198,49 +198,52 @@ export function SessionForm(props: SessionFormProps) {
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-semibold text-ink">
-            Khu vực gặp {mode === "plan" ? "" : <span className="font-normal text-muted">(không bắt buộc)</span>}
+            Nơi gặp {mode === "plan" ? "" : <span className="font-normal text-muted">(không bắt buộc)</span>}
           </span>
           <input
             value={locationLabel}
             onChange={(e) => setLocationLabel(e.target.value)}
-            maxLength={40}
-            placeholder="VD: Q.3, Cafe Lê Lợi"
+            maxLength={80}
+            placeholder="VD: Quán cafe Kết"
             className="h-12 rounded-lg border border-line bg-surface px-3 text-base text-ink"
           />
-          <span className="text-xs text-muted">
-            Cả khu vực đều thấy ô này. Không ghi địa chỉ nhà hay nơi làm việc của chiên; địa chỉ cụ thể ghi ở “Địa chỉ
-            chi tiết” (chỉ thành viên ca và người đồng hành thấy).
-          </span>
         </label>
-        {!showMore ? (
-          <button type="button" onClick={() => setShowMore(true)} className="self-start text-sm text-accent underline">
-            + Địa chỉ chi tiết, tóm tắt
-          </button>
-        ) : (
-          <>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold text-ink">
+            Link Google Maps <span className="font-normal text-muted">(không bắt buộc)</span>
+          </span>
+          <input
+            type="url"
+            inputMode="url"
+            value={mapUrl}
+            onChange={(e) => setMapUrl(e.target.value)}
+            maxLength={500}
+            placeholder="https://maps.app.goo.gl/..."
+            className="h-12 rounded-lg border border-line bg-surface px-3 text-base text-ink"
+          />
+          <span className="text-xs text-muted">Trên Google Maps bấm Chia sẻ → Sao chép đường liên kết.</span>
+        </label>
+        {mode !== "plan" &&
+          (!showSummary ? (
+            <button
+              type="button"
+              onClick={() => setShowSummary(true)}
+              className="self-start text-sm text-accent underline"
+            >
+              + Ghi chú
+            </button>
+          ) : (
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-semibold text-ink">Địa chỉ chi tiết</span>
-              <input
-                value={locationDetail}
-                onChange={(e) => setLocationDetail(e.target.value)}
-                maxLength={200}
-                className="h-12 rounded-lg border border-line bg-surface px-3 text-base text-ink"
+              <span className="text-sm font-semibold text-ink">Ghi chú</span>
+              <textarea
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                maxLength={2000}
+                rows={3}
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-base text-ink"
               />
             </label>
-            {mode !== "plan" && (
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-semibold text-ink">Tóm tắt</span>
-                <textarea
-                  value={summary}
-                  onChange={(e) => setSummary(e.target.value)}
-                  maxLength={2000}
-                  rows={3}
-                  className="rounded-lg border border-line bg-surface px-3 py-2 text-base text-ink"
-                />
-              </label>
-            )}
-          </>
-        )}
+          ))}
       </fieldset>
 
       {duplicates && (

@@ -85,20 +85,16 @@ async function Detail({
             </svg>
           </span>
           <div className="flex min-w-0 flex-col gap-1">
-            <p className="text-lg font-bold text-ink">{s.locationLabel ?? "Chưa ghi khu vực gặp"}</p>
-            {s.private ? (
-              s.private.locationDetail ? (
-                <p className="break-words text-base text-ink">
-                  <Linkified text={s.private.locationDetail} />
-                </p>
-              ) : (
-                <p className="text-sm text-muted">Chưa ghi địa chỉ chi tiết.</p>
-              )
-            ) : (
-              <p className="text-sm text-muted">
-                Địa chỉ chi tiết chỉ hiện với người trong ca, người đồng hành và khu vực trưởng
-                {s.canJoin ? ". Tham gia ca để xem." : "."}
-              </p>
+            <p className="break-words text-lg font-bold text-ink">{s.locationLabel ?? "Chưa ghi nơi gặp"}</p>
+            {s.mapUrl && (
+              <a
+                href={s.mapUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="self-start text-sm font-medium text-accent underline"
+              >
+                Mở Google Maps ↗
+              </a>
             )}
           </div>
         </div>
@@ -153,12 +149,6 @@ async function Detail({
               </ActionForm>
             )}
           </div>
-        )}
-        {isOpenPhase(phase) && (
-          <p className="text-xs text-muted">
-            Ca tự hoàn thành sau 2 tiếng kể từ giờ bắt đầu nếu không bị hủy. Chỉ người tạo ca mới hủy được
-            {s.canEdit ? "" : "; người đồng hành với chiên trong ca mới sửa được"}.
-          </p>
         )}
       </div>
     </>
@@ -229,7 +219,7 @@ function ListenerPanel({ l }: { l: SessionListener }) {
   );
 }
 
-// Plain text with http(s) links made clickable (people paste map links into the address).
+// Plain text with http(s) links made clickable (people paste profile links into the contact fields).
 function Linkified({ text }: { text: string }) {
   return (
     <>

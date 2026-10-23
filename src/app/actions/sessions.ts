@@ -27,7 +27,7 @@ const payloadSchema = z.object({
   memberIds: z.array(id).default([]),
   startsAt: z.string(),
   locationLabel: text,
-  locationDetail: text,
+  mapUrl: text,
   summary: text,
   confirmDistinct: z.boolean().optional(),
 });

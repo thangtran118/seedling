@@ -44,7 +44,7 @@ async function Edit({ params }: { params: PageProps<"/ca/[id]/sua">["params"] })
           memberIds: s.members.map((m) => m.id),
           startsAt: toLocalInputValue(s.startsAt),
           locationLabel: s.locationLabel ?? "",
-          locationDetail: s.private?.locationDetail ?? "",
+          mapUrl: s.mapUrl ?? "",
           summary: s.private?.summary ?? "",
         }}
       />
