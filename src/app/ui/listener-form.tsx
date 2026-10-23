@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { ListenerFormInput, ListenerFormResult } from "@/app/actions/listeners";
+import { applyStage, stageLabel, STAGES, type Stage } from "@/lib/domain";
 
 type Values = {
   name: string;
   birthYear: string;
-  manualStatus: "moi_quen" | "goi_mo";
+  stage: Stage;
   phone: string;
   hometown: string;
   facebook: string;
@@ -40,7 +41,7 @@ export function ListenerForm({
       const result = await submit({
         name: v.name,
         birthYear: v.birthYear,
-        manualStatus: mode === "create" ? v.manualStatus : undefined,
+        progress: mode === "create" ? applyStage({ manualStatus: "moi_quen", lessons: 0 }, v.stage) : undefined,
         private: {
           phone: v.phone,
           hometown: v.hometown,
@@ -76,9 +77,12 @@ export function ListenerForm({
         {mode === "create" && (
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-semibold text-ink">Trạng thái</span>
-            <select value={v.manualStatus} onChange={set("manualStatus")} className={input}>
-              <option value="moi_quen">Mới quen</option>
-              <option value="goi_mo">Gợi mở</option>
+            <select value={v.stage} onChange={set("stage")} className={input}>
+              {STAGES.map((s) => (
+                <option key={s} value={s}>
+                  {stageLabel(s)}
+                </option>
+              ))}
             </select>
           </label>
         )}

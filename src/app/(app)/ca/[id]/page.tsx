@@ -5,7 +5,7 @@ import { cancelSessionAction, joinSessionAction, leaveSessionAction } from "@/ap
 import { requireUser } from "@/lib/access/current-user";
 import { listenersForSession, type SessionListener } from "@/lib/access/listeners";
 import { getSessionDetail } from "@/lib/access/sessions";
-import { dayKey, formatDayLong, formatTime, isOpenPhase, sessionPhase } from "@/lib/domain";
+import { dayKey, formatDayLong, formatTime, isClosedStage, isOpenPhase, sessionPhase } from "@/lib/domain";
 import { ActionForm, PendingButton } from "@/app/ui/action-form";
 import {
   ButtonLink,
@@ -16,9 +16,9 @@ import {
   PageHeader,
   PhaseBadge,
   Section,
-  StatusBadge,
+  StageBadge,
 } from "@/app/ui/kit";
-import { LessonBlock, ProgressNote } from "@/app/ui/listener-card";
+import { ProgressNote } from "@/app/ui/listener-card";
 import { firstParam, loadOr404 } from "@/app/ui/load";
 
 export const metadata: Metadata = { title: "Ca trudo · Seedling" };
@@ -168,23 +168,20 @@ function ListenerPanel({ l }: { l: SessionListener }) {
   const contacts = p ? CONTACTS.filter(([k]) => p[k]) : [];
   return (
     <article className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
-      <div className="flex gap-3.5">
-        <LessonBlock lessons={l.lessons} status={l.status} />
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <Link href={`/nguoi-nghe/${l.id}`} className="text-xl font-bold leading-tight text-ink hover:underline">
             {l.name}
           </Link>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`text-base leading-tight ${l.age === null ? "text-muted" : "font-semibold text-ink"}`}>
-              {l.age === null ? "Chưa rõ tuổi" : `${l.age} tuổi`}
-            </span>
-            <StatusBadge status={l.status} />
-          </div>
-          <ProgressNote lessons={l.lessons} status={l.status} />
+          <p className="text-sm text-muted">{l.age === null ? "Chưa rõ tuổi" : `${l.age} tuổi`}</p>
         </div>
+        <StageBadge stage={l.stage} size="md" />
       </div>
 
-      <LessonDots heard={l.lessons} />
+      <div className="flex flex-col gap-1">
+        <LessonDots heard={l.lessons} closed={isClosedStage(l.stage)} />
+        <ProgressNote lessons={l.lessons} stage={l.stage} />
+      </div>
 
       {p ? (
         <dl className="flex flex-col gap-1.5 border-t border-line pt-3 text-sm">

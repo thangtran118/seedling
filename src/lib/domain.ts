@@ -5,24 +5,45 @@ export const LESSONS = [1, 2, 3, 4, 5, 6, 7] as const;
 // No caps on people per session: 2-4 người trudo and 1-2 chiên is only what a session usually looks like.
 
 export type ManualStatus = "moi_quen" | "goi_mo" | "baptem" | "tu_choi";
-export type DisplayStatus = ManualStatus | "dang_hoc";
 // Stored state. Whether a session is upcoming, in progress or completed follows from its start time (sessionPhase).
 export type SessionState = "planned" | "cancelled";
 
-export const STATUS_LABEL: Record<DisplayStatus, string> = {
+export const STATUS_LABEL: Record<ManualStatus, string> = {
   moi_quen: "Mới quen",
   goi_mo: "Gợi mở",
-  dang_hoc: "Đang học",
   baptem: "Báptem",
   tu_choi: "Từ chối",
 };
 
-// Design doc, Luật trạng thái: baptem/tu_choi are never changed automatically; otherwise any heard
-// lesson means "Đang học"; otherwise the manual status (mới quen / gợi mở) shows.
-export function displayStatus(manual: ManualStatus, lessonsHeard: readonly number[]): DisplayStatus {
-  if (manual === "baptem" || manual === "tu_choi") return manual;
-  return lessonsHeard.length > 0 ? "dang_hoc" : manual;
+// The one status shown everywhere: Mới quen, Gợi mở, Mảnh 1-7, Báptem, Từ chối. It is stored as two columns
+// (manual status + lessons reached); these helpers convert between the two. Báptem / từ chối are never changed
+// automatically (design doc, Luật trạng thái); otherwise the highest mảnh reached wins over mới quen / gợi mở.
+export type Stage = "moi_quen" | "goi_mo" | "baptem" | "tu_choi" | `${(typeof LESSONS)[number]}`;
+export type Progress = { manualStatus: ManualStatus; lessons: number };
+
+export const STAGES: Stage[] = ["moi_quen", "goi_mo", ...LESSONS.map((n) => `${n}` as Stage), "baptem", "tu_choi"];
+
+const isClosed = (s: ManualStatus) => s === "baptem" || s === "tu_choi";
+export const isClosedStage = (s: Stage) => s === "baptem" || s === "tu_choi";
+
+export function stageOf({ manualStatus, lessons }: Progress): Stage {
+  if (isClosed(manualStatus) || lessons === 0) return manualStatus;
+  return `${lessons}` as Stage;
 }
+
+export const stageLabel = (stage: Stage) =>
+  stage in STATUS_LABEL ? STATUS_LABEL[stage as ManualStatus] : `Mảnh ${stage}`;
+
+// Mới quen / Gợi mở mean no lesson yet; a mảnh reopens a báptem / từ chối listener; báptem / từ chối keep the
+// lessons reached so far.
+export function applyStage(p: Progress, stage: Stage): Progress {
+  if (stage === "moi_quen" || stage === "goi_mo") return { manualStatus: stage, lessons: 0 };
+  if (stage === "baptem" || stage === "tu_choi") return { manualStatus: stage, lessons: p.lessons };
+  return { manualStatus: isClosed(p.manualStatus) ? "goi_mo" : p.manualStatus, lessons: Number(stage) };
+}
+
+// Tapping mảnh N marks 1..N as heard; tapping the highest one again steps back to N-1.
+export const tapLesson = (p: Progress, n: number): Progress => ({ ...p, lessons: p.lessons === n ? n - 1 : n });
 
 // The mảnh to share next: the smallest lesson not heard yet (null when all 7 are done).
 export function nextLesson(lessonsHeard: readonly number[]): number | null {

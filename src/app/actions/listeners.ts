@@ -9,8 +9,7 @@ import {
   createListener,
   findSimilarListeners,
   removeLink,
-  setLessonsReached,
-  setManualStatus,
+  setProgress,
   updateListener,
 } from "@/lib/access/listeners";
 import { guard, type ActionError } from "./guard";
@@ -27,7 +26,12 @@ const listenerSchema = z.object({
     .union([z.number().int(), z.string(), z.null()])
     .optional()
     .transform((v) => (v === "" || v === null || v === undefined ? null : Number(v))),
-  manualStatus: z.enum(["moi_quen", "goi_mo"]).optional(),
+  progress: z
+    .object({
+      manualStatus: z.enum(["moi_quen", "goi_mo", "baptem", "tu_choi"]),
+      lessons: z.number().int().min(0).max(7),
+    })
+    .optional(),
   private: z.object({
     phone: optionalText,
     hometown: optionalText,
@@ -74,47 +78,32 @@ export async function updateListenerAction(listenerId: string, input: ListenerFo
 
 export type SimpleState = { error?: string } | undefined;
 
-const statusSchema = z.object({
-  listenerId: z.string().uuid(),
-  status: z.enum(["moi_quen", "goi_mo", "baptem", "tu_choi"]),
+const saveSchema = z.object({
+  progress: z
+    .object({
+      manualStatus: z.enum(["moi_quen", "goi_mo", "baptem", "tu_choi"]),
+      lessons: z.number().int().min(0).max(7),
+    })
+    .optional(),
+  addUserIds: z.array(z.string().uuid()).max(50).default([]),
 });
 
-export async function setStatusAction(_prev: SimpleState, formData: FormData): Promise<SimpleState> {
+// The listener page's single "Lưu": stage + mảnh (when changed) and the người đồng hành picked to add.
+export async function saveListenerAction(listenerId: string, input: z.input<typeof saveSchema>): Promise<SimpleState> {
   const user = await requireUser();
-  const parsed = statusSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: "Dữ liệu không hợp lệ." };
-  const result = await guard(() => setManualStatus(user, parsed.data.listenerId, parsed.data.status));
-  if (result) return { error: result.error };
-  refresh();
-  return {};
-}
-
-const lessonsSchema = z.object({
-  listenerId: z.string().uuid(),
-  lesson: z.coerce.number().int().min(0).max(7),
-});
-
-export async function setLessonsAction(_prev: SimpleState, formData: FormData): Promise<SimpleState> {
-  const user = await requireUser();
-  const parsed = lessonsSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: "Dữ liệu không hợp lệ." };
-  const result = await guard(() => setLessonsReached(user, parsed.data.listenerId, parsed.data.lesson));
+  const parsed = saveSchema.safeParse(input);
+  if (!parsed.success || !z.string().uuid().safeParse(listenerId).success) return { error: "Dữ liệu không hợp lệ." };
+  const { progress, addUserIds } = parsed.data;
+  const result = await guard(async () => {
+    if (progress) await setProgress(user, listenerId, progress);
+    for (const userId of addUserIds) await addLink(user, listenerId, userId);
+  });
   if (result) return { error: result.error };
   refresh();
   return {};
 }
 
 const linkSchema = z.object({ listenerId: z.string().uuid(), userId: z.string().uuid() });
-
-export async function addLinkAction(_prev: SimpleState, formData: FormData): Promise<SimpleState> {
-  const user = await requireUser();
-  const parsed = linkSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: "Chọn một người." };
-  const result = await guard(() => addLink(user, parsed.data.listenerId, parsed.data.userId));
-  if (result) return { error: result.error };
-  refresh();
-  return {};
-}
 
 export async function removeLinkAction(_prev: SimpleState, formData: FormData): Promise<SimpleState> {
   const user = await requireUser();

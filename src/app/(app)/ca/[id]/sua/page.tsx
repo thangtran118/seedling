@@ -36,7 +36,8 @@ async function Edit({ params }: { params: PageProps<"/ca/[id]/sua">["params"] })
       <SessionForm
         mode="edit"
         currentUserId={user.id}
-        listeners={s.listeners.map((l) => ({ id: l.id, name: l.name, lessons: [], linked: true, status: "moi_quen" }))}
+        // Listeners are fixed when editing and only their names show, so the stage is not needed.
+        listeners={s.listeners.map((l) => ({ id: l.id, name: l.name, linked: true, stage: "moi_quen" }))}
         members={memberChoices.map(({ id: mid, name }) => ({ id: mid, name }))}
         submit={updateSessionAction.bind(null, s.id)}
         initial={{

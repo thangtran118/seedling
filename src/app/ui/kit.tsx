@@ -1,7 +1,7 @@
 // Server-safe presentational components shared by the app screens.
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { LESSONS, PHASE_LABEL, STATUS_LABEL, type DisplayStatus, type SessionPhase } from "@/lib/domain";
+import { LESSONS, PHASE_LABEL, stageLabel, type SessionPhase, type Stage } from "@/lib/domain";
 
 export function PageHeader({ title, back, action }: { title: string; back?: string; action?: ReactNode }) {
   return (
@@ -54,34 +54,41 @@ export function Empty({ children }: { children: ReactNode }) {
   );
 }
 
-const STATUS_TONE: Record<DisplayStatus, string> = {
+// Mảnh 1-7 share one tone; the other stages keep their own.
+const STAGE_TONE = {
   moi_quen: "bg-line/50 text-ink",
   goi_mo: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
-  dang_hoc: "bg-accent/15 text-accent",
+  lesson: "bg-accent/15 text-accent",
   baptem: "bg-sky-500/15 text-sky-800 dark:text-sky-300",
   tu_choi: "bg-danger/10 text-danger",
 };
 
-export function StatusBadge({ status }: { status: DisplayStatus }) {
+// The one status shown for a listener everywhere: Mới quen, Gợi mở, Mảnh 1-7, Báptem, Từ chối.
+export function StageBadge({ stage, size = "sm" }: { stage: Stage; size?: "sm" | "md" }) {
+  const tone = STAGE_TONE[stage in STAGE_TONE ? (stage as keyof typeof STAGE_TONE) : "lesson"];
+  const text = size === "md" ? "px-2.5 py-1 text-sm font-semibold" : "px-2 py-0.5 text-xs font-medium";
   return (
-    <span
-      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_TONE[status]}`}
-    >
-      {STATUS_LABEL[status]}
+    <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full ${text} ${tone}`}>
+      {stageLabel(stage)}
     </span>
   );
 }
 
 // Seven small squares, filled up through the highest lesson heard (progress is sequential: no gaps).
-export function LessonDots({ heard, size = "sm" }: { heard: number[]; size?: "sm" | "md" }) {
-  const box = size === "sm" ? "h-5 w-5 text-[10px]" : "h-8 w-8 text-sm";
+// Greyed out once the listener is báptem / từ chối.
+export function LessonDots({ heard, closed = false }: { heard: number[]; closed?: boolean }) {
+  const box = "h-5 w-5 text-[10px]";
   return (
     <span className="inline-flex gap-1" aria-label={`Đã nghe mảnh ${heard.join(", ") || "chưa có"}`}>
       {LESSONS.map((l) => (
         <span
           key={l}
           className={`inline-flex ${box} items-center justify-center rounded font-semibold ${
-            heard.includes(l) ? "bg-accent text-on-accent" : "border border-line text-muted"
+            heard.includes(l)
+              ? closed
+                ? "bg-line text-ink"
+                : "bg-accent text-on-accent"
+              : "border border-line text-muted"
           }`}
         >
           {l}

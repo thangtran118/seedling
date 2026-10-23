@@ -33,7 +33,7 @@ async function Edit({ params }: { params: PageProps<"/nguoi-nghe/[id]/sua">["par
         initial={{
           name: l.name,
           birthYear: l.birthYear ? String(l.birthYear) : "",
-          manualStatus: "moi_quen",
+          stage: "moi_quen",
           phone: p.phone ?? "",
           hometown: p.hometown ?? "",
           facebook: p.facebook ?? "",

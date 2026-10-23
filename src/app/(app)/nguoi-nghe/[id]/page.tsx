@@ -1,25 +1,14 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { addLinkAction, removeLinkAction, setLessonsAction, setStatusAction } from "@/app/actions/listeners";
+import { removeLinkAction } from "@/app/actions/listeners";
 import { requireUser } from "@/lib/access/current-user";
 import { getListenerDetail, type ListenerDetail } from "@/lib/access/listeners";
 import { listAreaMembers } from "@/lib/access/members";
-import { formatDate, formatDateTime, LESSONS, sessionPhase, STATUS_LABEL, type ManualStatus } from "@/lib/domain";
+import { formatDate, formatDateTime, sessionPhase } from "@/lib/domain";
 import { ActionForm, PendingButton } from "@/app/ui/action-form";
-import {
-  ButtonLink,
-  Card,
-  Empty,
-  LessonDots,
-  Loading,
-  PageHeader,
-  PHASE_TONE,
-  PhaseBadge,
-  Section,
-  StatusBadge,
-} from "@/app/ui/kit";
-import { LessonBlock, ProgressNote } from "@/app/ui/listener-card";
+import { ButtonLink, Card, Empty, Loading, PageHeader, PHASE_TONE, PhaseBadge, Section } from "@/app/ui/kit";
+import { CompanionPicker, ListenerEditor, ListenerMainCard } from "@/app/ui/listener-editor";
 import { loadOr404 } from "@/app/ui/load";
 
 export const metadata: Metadata = { title: "Chiên · Seedling" };
@@ -40,8 +29,6 @@ const PRIVATE_LABELS = [
   ["telegram", "Telegram"],
 ] as const;
 
-const MANUAL: ManualStatus[] = ["moi_quen", "goi_mo", "baptem", "tu_choi"];
-
 async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["params"] }) {
   const { id } = await params;
   const user = await requireUser();
@@ -49,10 +36,13 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
   const members = l.canManageLinks ? await listAreaMembers(user) : [];
   const linkable = members.filter((m) => !l.links.some((x) => x.userId === m.id));
 
+  const saved = { manualStatus: l.manualStatus, lessons: l.lessons.length };
+
   return (
-    <>
+    // key: start a fresh draft from the saved values after each save
+    <ListenerEditor key={`${saved.manualStatus}-${saved.lessons}-${l.links.length}`} listenerId={l.id} initial={saved}>
       <PageHeader
-        title={l.name}
+        title="Chiên"
         back="/nguoi-nghe"
         action={
           l.canEdit ? (
@@ -62,21 +52,7 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
           ) : undefined
         }
       />
-      <section className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-4">
-        <div className="flex gap-4">
-          <LessonBlock lessons={l.lessons} status={l.status} size="lg" />
-          <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
-            <span className={`text-2xl font-bold leading-tight ${l.age === null ? "text-muted" : "text-ink"}`}>
-              {l.age === null ? "Chưa rõ tuổi" : `${l.age} tuổi`}
-            </span>
-            <span>
-              <StatusBadge status={l.status} />
-            </span>
-            <ProgressNote lessons={l.lessons} status={l.status} />
-          </div>
-        </div>
-        <LessonDots heard={l.lessons} size="md" />
-      </section>
+      <ListenerMainCard name={l.name} age={l.age} notes={l.private?.notes ?? null} canEdit={l.canEdit} />
 
       {/* Planning is for direct companions (người đồng hành) only, the area leader included. */}
       {l.canEdit && <ButtonLink href={`/ca/hen?nguoi-nghe=${l.id}`}>Đặt lịch trudo</ButtonLink>}
@@ -99,63 +75,8 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
                   </dd>
                 </div>
               ))}
-              {l.private.notes && (
-                <div className="border-t border-line pt-2">
-                  <dt className="text-muted">Ghi chú</dt>
-                  <dd className="whitespace-pre-wrap text-ink">{l.private.notes}</dd>
-                </div>
-              )}
             </dl>
           </Card>
-        </Section>
-      )}
-
-      {l.canEdit && (
-        <Section title="Mảnh">
-          {/* key: reset the select to the saved value after a save or a rejected one */}
-          <ActionForm
-            key={l.lessons.length}
-            action={setLessonsAction}
-            hidden={{ listenerId: l.id }}
-            className="flex flex-wrap gap-2"
-          >
-            <>
-              <select
-                name="lesson"
-                defaultValue={l.lessons.length}
-                className="h-11 flex-1 rounded-lg border border-line bg-surface px-3"
-              >
-                <option value={0}>Chưa nghe mảnh nào</option>
-                {LESSONS.map((n) => (
-                  <option key={n} value={n}>
-                    Đã đến mảnh {n}
-                  </option>
-                ))}
-              </select>
-              <PendingButton className="h-11 rounded-lg border border-line px-4 text-sm">Lưu</PendingButton>
-            </>
-          </ActionForm>
-        </Section>
-      )}
-
-      {l.canEdit && (
-        <Section title="Trạng thái">
-          <ActionForm action={setStatusAction} hidden={{ listenerId: l.id }} className="flex gap-2">
-            <>
-              <select
-                name="status"
-                defaultValue={l.manualStatus}
-                className="h-11 flex-1 rounded-lg border border-line bg-surface px-3"
-              >
-                {MANUAL.map((s) => (
-                  <option key={s} value={s}>
-                    {STATUS_LABEL[s]}
-                  </option>
-                ))}
-              </select>
-              <PendingButton className="h-11 rounded-lg border border-line px-4 text-sm">Lưu</PendingButton>
-            </>
-          </ActionForm>
         </Section>
       )}
 
@@ -166,8 +87,11 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
               key={link.userId}
               className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2"
             >
-              <span className="text-ink">{link.userId === user.id ? `${link.name} (bạn)` : link.name}</span>
-              {user.role === "area_leader" && l.links.length > 1 && (
+              <span className="text-ink">
+                {link.userId === user.id ? `${link.name} (bạn)` : link.name}
+                {link.primary && <span className="ml-2 text-xs text-muted">Đồng hành chính</span>}
+              </span>
+              {user.role === "area_leader" && !link.primary && l.links.length > 1 && (
                 <ActionForm
                   action={removeLinkAction}
                   hidden={{ listenerId: l.id, userId: link.userId }}
@@ -180,30 +104,14 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
           ))}
         </ul>
         {l.canManageLinks && linkable.length > 0 && (
-          <ActionForm action={addLinkAction} hidden={{ listenerId: l.id }} className="flex gap-2">
-            <>
-              <select
-                name="userId"
-                defaultValue=""
-                className="h-11 flex-1 rounded-lg border border-line bg-surface px-3"
-              >
-                <option value="" disabled>
-                  Thêm người đồng hành…
-                </option>
-                {linkable.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.id === user.id ? `${m.name} (bạn)` : m.name}
-                  </option>
-                ))}
-              </select>
-              <PendingButton className="h-11 rounded-lg border border-line px-4 text-sm">Thêm</PendingButton>
-            </>
-          </ActionForm>
+          <CompanionPicker
+            choices={linkable.map((m) => ({ id: m.id, label: m.id === user.id ? `${m.name} (bạn)` : m.name }))}
+          />
         )}
       </Section>
 
       <History history={l.history} />
-    </>
+    </ListenerEditor>
   );
 }
 

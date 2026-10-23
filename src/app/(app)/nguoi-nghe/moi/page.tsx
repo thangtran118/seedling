@@ -27,7 +27,7 @@ async function Form() {
       initial={{
         name: "",
         birthYear: "",
-        manualStatus: "moi_quen",
+        stage: "moi_quen",
         phone: "",
         hometown: "",
         facebook: "",

@@ -12,6 +12,7 @@ import {
   formatDayLong,
   formatDuration,
   formatTime,
+  isClosedStage,
   SESSION_LIVE_MS,
   sessionPhase,
   WEEKDAY_SHORT,
@@ -158,7 +159,7 @@ async function Home() {
 
 // Open listeners first, longest without a session on top; báptem / từ chối last.
 function sortForAttention(ls: ListenerSummary[]) {
-  const closed = (l: ListenerSummary) => l.status === "baptem" || l.status === "tu_choi";
+  const closed = (l: ListenerSummary) => isClosedStage(l.stage);
   const last = (l: ListenerSummary) => (l.lastDoneAt ? new Date(l.lastDoneAt).getTime() : 0);
   return [...ls].sort((a, b) => Number(closed(a)) - Number(closed(b)) || last(a) - last(b));
 }

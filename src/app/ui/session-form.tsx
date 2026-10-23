@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import type { SessionFormResult, SessionPayload } from "@/app/actions/sessions";
-import { formatDateTime, isOpenPhase, PHASE_LABEL, sessionPhase, STATUS_LABEL, type DisplayStatus } from "@/lib/domain";
+import { formatDateTime, isOpenPhase, PHASE_LABEL, sessionPhase, stageLabel, type Stage } from "@/lib/domain";
 
-export type PickListener = { id: string; name: string; status: DisplayStatus; lessons: number[]; linked: boolean };
+export type PickListener = { id: string; name: string; stage: Stage; linked: boolean };
 export type PickMember = { id: string; name: string };
 
 type Mode = "plan" | "edit";
@@ -130,8 +130,7 @@ export function SessionForm(props: SessionFormProps) {
                   >
                     <span className="font-medium text-ink">{l.name}</span>
                     <span className="text-xs text-muted">
-                      {STATUS_LABEL[l.status]}
-                      {l.lessons.length ? ` · đến mảnh ${l.lessons.length}` : ""}
+                      {stageLabel(l.stage)}
                       {l.linked ? " · của bạn" : ""}
                     </span>
                   </button>

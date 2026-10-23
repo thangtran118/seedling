@@ -13,11 +13,12 @@ import {
 } from "@/db/schema";
 import {
   ageFromBirthYear,
-  displayStatus,
+  stageOf,
   LESSONS,
-  type DisplayStatus,
   type ManualStatus,
+  type Progress,
   type SessionState,
+  type Stage,
 } from "@/lib/domain";
 import type { SessionUser } from "./auth";
 import { completedAt } from "./phase";
@@ -29,7 +30,7 @@ export type ListenerSummary = {
   id: string;
   name: string;
   age: number | null;
-  status: DisplayStatus;
+  stage: Stage;
   manualStatus: ManualStatus;
   lessons: number[];
   linked: boolean;
@@ -56,7 +57,7 @@ export type ListenerHistoryItem = {
 
 export type ListenerDetail = ListenerSummary & {
   birthYear: number | null;
-  links: { userId: string; name: string }[];
+  links: { userId: string; name: string; primary: boolean }[]; // primary: created the listener, cannot be removed
   canEdit: boolean;
   canManageLinks: boolean;
   private: ListenerPrivateFields | null; // null when the viewer may not see it
@@ -153,7 +154,7 @@ async function summarize(viewer: SessionUser, rows: (typeof listeners.$inferSele
       id: r.id,
       name: r.name,
       age: ageFromBirthYear(r.birthYear),
-      status: displayStatus(r.manualStatus, heard),
+      stage: stageOf({ manualStatus: r.manualStatus, lessons: heard.length }),
       manualStatus: r.manualStatus,
       lessons: heard,
       linked: linkedIds.has(r.id),
@@ -270,12 +271,14 @@ export async function getListenerDetail(viewer: SessionUser, listenerId: string)
   const row = await loadInArea(viewer, listenerId);
   const [summary] = await summarize(viewer, [row]);
 
-  const links = await db
-    .select({ userId: users.id, name: users.name })
-    .from(listenerLinks)
-    .innerJoin(users, eq(users.id, listenerLinks.userId))
-    .where(eq(listenerLinks.listenerId, listenerId))
-    .orderBy(asc(listenerLinks.createdAt));
+  const links = (
+    await db
+      .select({ userId: users.id, name: users.name })
+      .from(listenerLinks)
+      .innerJoin(users, eq(users.id, listenerLinks.userId))
+      .where(eq(listenerLinks.listenerId, listenerId))
+      .orderBy(asc(listenerLinks.createdAt))
+  ).map((link) => ({ ...link, primary: link.userId === row.createdBy }));
 
   const canViewPrivate = summary.linked || viewer.role === "area_leader";
   let privateFields: ListenerPrivateFields | null = null;
@@ -387,11 +390,12 @@ const hasAny = (p: ListenerPrivateFields) => Object.values(p).some((v) => v !== 
 
 export async function createListener(
   viewer: SessionUser,
-  input: ListenerInput & { manualStatus?: ManualStatus },
+  input: ListenerInput & { progress?: Progress },
 ): Promise<string> {
   const clean = validateListenerInput(input);
-  const status = input.manualStatus ?? "moi_quen";
-  if (status !== "moi_quen" && status !== "goi_mo") throw invalidError("Trạng thái ban đầu không hợp lệ.");
+  // A listener may be added part-way: at mảnh N, or already báptem / từ chối.
+  const { manualStatus, lessons } = input.progress ?? { manualStatus: "moi_quen", lessons: 0 };
+  if (!Number.isInteger(lessons) || lessons < 0 || lessons > LESSONS.length) throw invalidError("Mảnh không hợp lệ.");
 
   return db.transaction(async (tx) => {
     const [row] = await tx
@@ -400,7 +404,10 @@ export async function createListener(
         areaId: viewer.areaId,
         name: clean.name,
         birthYear: clean.birthYear,
-        manualStatus: status,
+        manualStatus,
+        lessonsReached: lessons,
+        firstLessonAt: lessons > 0 ? new Date() : null,
+        baptizedAt: manualStatus === "baptem" ? new Date() : null,
         createdBy: viewer.id,
       })
       .returning({ id: listeners.id });
@@ -434,27 +441,20 @@ export async function updateListener(viewer: SessionUser, listenerId: string, in
   });
 }
 
-// Mảnh is edited directly on the listener (0 = chưa nghe mảnh nào); sessions do not record lessons.
-export async function setLessonsReached(viewer: SessionUser, listenerId: string, lesson: number) {
+// Stage and mảnh are edited together on the listener page (lessons 0 = chưa nghe mảnh nào); sessions do not
+// record lessons.
+export async function setProgress(viewer: SessionUser, listenerId: string, p: Progress) {
   await requireLinked(viewer, listenerId);
-  if (!Number.isInteger(lesson) || lesson < 0 || lesson > LESSONS.length) throw invalidError("Mảnh không hợp lệ.");
+  if (!Number.isInteger(p.lessons) || p.lessons < 0 || p.lessons > LESSONS.length)
+    throw invalidError("Mảnh không hợp lệ.");
   await db
     .update(listeners)
     .set({
-      lessonsReached: lesson,
+      manualStatus: p.manualStatus,
+      lessonsReached: p.lessons,
       // Keeps the first time mảnh 1 was reached; going back to 0 means they have not heard it after all.
-      firstLessonAt: lesson === 0 ? null : sql`coalesce(${listeners.firstLessonAt}, now())`,
-    })
-    .where(eq(listeners.id, listenerId));
-}
-
-export async function setManualStatus(viewer: SessionUser, listenerId: string, status: ManualStatus) {
-  await requireLinked(viewer, listenerId);
-  await db
-    .update(listeners)
-    .set({
-      manualStatus: status,
-      baptizedAt: status === "baptem" ? sql`coalesce(${listeners.baptizedAt}, now())` : null,
+      firstLessonAt: p.lessons === 0 ? null : sql`coalesce(${listeners.firstLessonAt}, now())`,
+      baptizedAt: p.manualStatus === "baptem" ? sql`coalesce(${listeners.baptizedAt}, now())` : null,
     })
     .where(eq(listeners.id, listenerId));
 }
@@ -474,10 +474,12 @@ export async function addLink(viewer: SessionUser, listenerId: string, targetUse
   });
 }
 
-// Removing links is a leader action; the last link can never be removed so every listener stays editable.
+// Removing links is a leader action. The person who created the listener (người đồng hành chính) stays, so every
+// listener keeps at least that one link and stays editable.
 export async function removeLink(viewer: SessionUser, listenerId: string, targetUserId: string) {
-  await loadInArea(viewer, listenerId);
+  const row = await loadInArea(viewer, listenerId);
   if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng mới được bỏ người đồng hành.");
+  if (targetUserId === row.createdBy) throw invalidError("Không thể bỏ người đồng hành chính (người tạo chiên).");
   await db.transaction(async (tx) => {
     const links = await tx
       .select({ userId: listenerLinks.userId })
