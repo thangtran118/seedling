@@ -1,11 +1,12 @@
 name: seedling-trudo
 
+# Local development only. Production runs on Vercel + Neon (see DEPLOY.md).
 services:
   db:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: seedling
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seedling}
+      POSTGRES_PASSWORD: seedling
       POSTGRES_DB: seedling
     ports:
       - "127.0.0.1:5433:5432"
@@ -15,39 +16,6 @@ services:
       test: ["CMD-SHELL", "pg_isready -U seedling"]
       interval: 5s
       retries: 10
-    restart: unless-stopped
-
-  # Production (see DEPLOY.md): `docker compose --profile prod up -d --build` runs the app behind Caddy (TLS).
-  app:
-    profiles: ["prod"]
-    build: .
-    environment:
-      DATABASE_URL: postgres://seedling:${POSTGRES_PASSWORD:-seedling}@db:5432/seedling
-    ports:
-      - "127.0.0.1:3000:3000"
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-
-  caddy:
-    profiles: ["prod"]
-    image: caddy:2-alpine
-    environment:
-      SITE_DOMAIN: ${SITE_DOMAIN:-localhost}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on:
-      - app
-    restart: unless-stopped
 
 volumes:
   seedling-db:
-  caddy-data:
-  caddy-config:

@@ -2,6 +2,9 @@
   "name": "seedling",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -13,7 +16,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx scripts/seed.ts",
     "format": "prettier --write src scripts",
-    "admin": "tsx scripts/admin.ts"
+    "admin": "tsx scripts/admin.ts",
+    "vercel-build": "if [ \"$VERCEL_ENV\" = production ]; then pnpm db:migrate; fi && pnpm build"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",

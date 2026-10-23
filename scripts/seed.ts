@@ -10,6 +10,11 @@ const DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (n: number) => new Date(Date.now() - n * DAY);
 
 async function wipe() {
+  // Production (Neon) is reachable from a laptop, so refuse anything that is not a local database.
+  const host = new URL(process.env.DATABASE_URL!).hostname;
+  if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(host)) {
+    throw new Error(`refusing to wipe a non-local database (${host})`);
+  }
   await sqlClient`truncate private.session_private, private.listener_private, pii_access_log,
     session_listeners, session_members, sessions, listener_links, listeners,
     login_attempts, auth_sessions, users, areas cascade`;

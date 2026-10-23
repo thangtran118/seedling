@@ -6,5 +6,6 @@ export default defineConfig({
   out: "./drizzle",
   dialect: "postgresql",
   schemaFilter: ["public", "private"],
-  dbCredentials: { url: process.env.DATABASE_URL! },
+  // Migrations need a direct connection; Neon's pooled URL (DATABASE_URL in production) goes through PgBouncer.
+  dbCredentials: { url: (process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL)! },
 });

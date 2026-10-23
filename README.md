@@ -34,7 +34,7 @@ pnpm admin reset-leader --phone 09xxxxxxxx                                  # m�
 pnpm admin access-log --days 7                                              # ai đã xem dữ liệu riêng tư
 ```
 
-Production (AWS EC2, Docker, Caddy lo HTTPS): xem **[DEPLOY.md](DEPLOY.md)**.
+Production (Vercel + Neon, 0 USD/tháng): xem **[DEPLOY.md](DEPLOY.md)**.
 
 ## Cấu trúc
 
