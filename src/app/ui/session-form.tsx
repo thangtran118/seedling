@@ -221,7 +221,6 @@ export function SessionForm(props: SessionFormProps) {
             placeholder="https://maps.app.goo.gl/..."
             className="h-12 rounded-lg border border-line bg-surface px-3 text-base text-ink"
           />
-          <span className="text-xs text-muted">Trên Google Maps bấm Chia sẻ → Sao chép đường liên kết.</span>
         </label>
         {mode !== "plan" &&
           (!showSummary ? (

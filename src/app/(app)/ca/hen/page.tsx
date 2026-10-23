@@ -9,7 +9,6 @@ export default function PlanPage(props: PageProps<"/ca/hen">) {
   return (
     <>
       <PageHeader title="Đặt lịch trudo" back="/" />
-      <p className="text-sm text-muted">Ca hẹn hiện trên lịch khu vực để mọi người tham gia.</p>
       <Suspense fallback={<Loading />}>
         <SessionEntry searchParams={props.searchParams} />
       </Suspense>

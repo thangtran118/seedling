@@ -86,9 +86,6 @@ export function ListenerForm({
 
       <fieldset className="flex flex-col gap-3 rounded-xl border border-line p-3">
         <legend className="px-1 text-sm font-semibold text-ink">Thông tin riêng tư</legend>
-        <p className="text-xs text-muted">
-          Chỉ người đồng hành và khu vực trưởng thấy phần này. Mọi lần xem đều được ghi lại. Chỉ ghi khi chiên đồng ý.
-        </p>
         {(
           [
             ["phone", "Số điện thoại", "tel"],

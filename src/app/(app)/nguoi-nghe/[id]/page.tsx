@@ -13,7 +13,6 @@ import {
   Empty,
   LessonDots,
   Loading,
-  Notice,
   PageHeader,
   PHASE_TONE,
   PhaseBadge,
@@ -108,7 +107,6 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
               )}
             </dl>
           </Card>
-          <p className="text-xs text-muted">Lần xem này đã được ghi lại.</p>
         </Section>
       )}
 
@@ -137,7 +135,6 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
               <PendingButton className="h-11 rounded-lg border border-line px-4 text-sm">Lưu</PendingButton>
             </>
           </ActionForm>
-          <p className="text-xs text-muted">Chọn mảnh chiên đã đến; các mảnh trước đó tự tính là đã xong.</p>
         </Section>
       )}
 
@@ -159,9 +156,6 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
               <PendingButton className="h-11 rounded-lg border border-line px-4 text-sm">Lưu</PendingButton>
             </>
           </ActionForm>
-          <p className="text-xs text-muted">
-            “Đang học” tự hiện khi đã có mảnh. Báptem và Từ chối không bao giờ tự đổi.
-          </p>
         </Section>
       )}
 
@@ -214,13 +208,7 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
 }
 
 function History({ history }: { history: ListenerDetail["history"] }) {
-  if (history === null) {
-    return (
-      <Section title="Lịch sử hẹn ca">
-        <Notice>Lịch sử hẹn ca chỉ hiện với người đồng hành, người đã đi ca cùng chiên này và khu vực trưởng.</Notice>
-      </Section>
-    );
-  }
+  if (history === null) return null;
   // Saved automatically: every session with this chiên shows here, and turns "Hoàn thành" 2 hours after it starts
   // unless it was cancelled.
   const now = new Date();

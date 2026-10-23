@@ -210,11 +210,7 @@ function ListenerPanel({ l }: { l: SessionListener }) {
             </div>
           )}
         </dl>
-      ) : (
-        <p className="border-t border-line pt-3 text-xs text-muted">
-          Thông tin liên hệ chỉ hiện với người đồng hành và khu vực trưởng.
-        </p>
-      )}
+      ) : null}
     </article>
   );
 }
