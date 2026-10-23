@@ -43,7 +43,6 @@ export const users = pgTable("users", {
   tempPasswordExpiresAt: timestamp("temp_password_expires_at", { withTimezone: true }),
   failedLogins: integer("failed_logins").notNull().default(0),
   lockedAt: timestamp("locked_at", { withTimezone: true }),
-  consentedAt: timestamp("consented_at", { withTimezone: true }),
   createdBy: uuid("created_by"),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),

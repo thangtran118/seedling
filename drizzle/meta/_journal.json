@@ -29,6 +29,13 @@
       "when": 1792661947133,
       "tag": "0003_listener_milestones",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792743233118,
+      "tag": "0004_drop_consent",
+      "breakpoints": true
     }
   ]
 }

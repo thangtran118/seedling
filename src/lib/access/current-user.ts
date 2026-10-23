@@ -15,16 +15,14 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   return getSessionUser(token);
 });
 
-type Gate = "full" | "password-change" | "consent";
+type Gate = "full" | "password-change";
 
-// "full": logged in, password changed, consent given. Earlier gates are used by the onboarding pages themselves.
+// "full": logged in and password changed. "password-change" is used by the password page itself.
 export async function requireUser(gate: Gate = "full"): Promise<SessionUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (gate === "password-change") return user;
   if (user.mustChangePassword) redirect("/doi-mat-khau");
-  if (gate === "consent") return user;
-  if (!user.consented) redirect("/dong-y");
   return user;
 }
 

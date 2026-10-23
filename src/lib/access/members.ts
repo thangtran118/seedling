@@ -17,7 +17,6 @@ export type MemberAdminView = AreaMember & {
   active: boolean;
   locked: boolean;
   mustChangePassword: boolean;
-  consented: boolean;
 };
 
 // Active people in the viewer's area, for "người đi cùng" and "thêm người đồng hành" pickers.
@@ -58,7 +57,6 @@ export async function listMembersForAdmin(viewer: SessionUser): Promise<MemberAd
     active: u.active,
     locked: u.lockedAt !== null,
     mustChangePassword: u.mustChangePassword,
-    consented: u.consentedAt !== null,
   }));
 }
 
@@ -113,7 +111,7 @@ export async function setMemberLocked(viewer: SessionUser, userId: string, locke
   if (locked) await revokeAllSessions(userId);
 }
 
-// Accounts with no history (e.g. consent refused, never logged in) are deleted outright; accounts that
+// Accounts with no history (e.g. never logged in) are deleted outright; accounts that
 // appear in sessions or links are deactivated so the session history stays intact.
 export async function removeMember(viewer: SessionUser, userId: string): Promise<"deleted" | "deactivated"> {
   const user = await loadMember(viewer, userId);

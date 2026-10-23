@@ -73,7 +73,6 @@ export function MemberRow({ member, isSelf }: { member: MemberAdminView; isSelf:
     !member.active && "Đã vô hiệu",
     member.locked && "Đang khóa",
     member.active && member.mustChangePassword && "Chưa đổi mật khẩu",
-    member.active && !member.mustChangePassword && !member.consented && "Chưa đồng ý",
   ].filter(Boolean);
 
   return (

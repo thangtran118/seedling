@@ -13,13 +13,9 @@ export function ChangePasswordForm({ forced, minLength }: { forced: boolean; min
           Đây là lần đăng nhập đầu tiên. Hãy đặt mật khẩu riêng của bạn.
         </p>
       )}
-      <Field
-        label={forced ? "Mật khẩu tạm" : "Mật khẩu hiện tại"}
-        name="current"
-        type="password"
-        autoComplete="current-password"
-        required
-      />
+      {!forced && (
+        <Field label="Mật khẩu hiện tại" name="current" type="password" autoComplete="current-password" required />
+      )}
       <Field
         label="Mật khẩu mới"
         name="next"

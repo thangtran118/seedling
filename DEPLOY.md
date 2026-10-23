@@ -78,7 +78,7 @@ export NEON_URL='postgresql://...neon.tech/seedling?sslmode=require'   # URL k�
 DATABASE_URL="$NEON_URL" pnpm admin bootstrap --area "Khu vực A" --name "Nguyễn Văn A" --phone 0912345678
 ```
 
-Lệnh in ra **mật khẩu tạm** (hết hạn sau 72 giờ). Khu vực trưởng đăng nhập, đổi mật khẩu và đồng ý điều khoản, rồi thêm
+Lệnh in ra **mật khẩu tạm** (hết hạn sau 72 giờ). Khu vực trưởng đăng nhập, đặt mật khẩu mới, rồi thêm
 thánh đồ ở trang **Thành viên** và thêm chiên ở trang **Chiên**. Cách này tự đảm bảo mọi ràng buộc của dữ liệu.
 
 ### Cách B: thêm trực tiếp vào database
@@ -100,7 +100,7 @@ Thứ tự thêm và các cột cần chú ý (mọi cột `id` đều tự sinh
      ```
    - `role`: `member` hoặc `area_leader`.
    - Nên đặt `must_change_password = true` và `temp_password_expires_at = now() + interval '72 hours'` để người dùng đổi
-     mật khẩu ở lần đăng nhập đầu. Để `consented_at` trống: app sẽ hỏi đồng ý điều khoản khi đăng nhập.
+     mật khẩu ở lần đăng nhập đầu.
 3. **`listeners`**: chiên.
    - `manual_status`: `moi_quen`, `goi_mo`, `baptem` hoặc `tu_choi`.
    - `lessons_reached`: mảnh đã đến, từ `0` đến `7`.

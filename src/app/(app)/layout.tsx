@@ -21,7 +21,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
 
 async function Nav() {
   const user = await getCurrentUser();
-  if (!user || user.mustChangePassword || !user.consented) return null;
+  if (!user || user.mustChangePassword) return null;
   const isLeader = user.role === "area_leader";
   return (
     <>

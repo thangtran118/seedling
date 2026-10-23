@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { changePassword, login, recordConsent, revokeSession } from "@/lib/access/auth";
+import { changePassword, login, revokeSession } from "@/lib/access/auth";
 import {
   clearSessionCookie,
   clientIp,
@@ -28,26 +28,19 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
   if (!result.ok) return { error: LOGIN_ERRORS[result.error], phone };
 
   await setSessionCookie(result.token, result.expiresAt);
-  if (result.user.mustChangePassword) redirect("/doi-mat-khau");
-  if (!result.user.consented) redirect("/dong-y");
-  redirect("/");
+  redirect(result.user.mustChangePassword ? "/doi-mat-khau" : "/");
 }
 
 export async function changePasswordAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requireUser("password-change");
-  const current = String(formData.get("current") ?? "");
+  // Absent on the first-login form: the user signed in with the temporary password moments ago.
+  const current = user.mustChangePassword ? null : String(formData.get("current") ?? "");
   const next = String(formData.get("next") ?? "");
   if (next !== String(formData.get("confirm") ?? "")) return { error: "Hai lần nhập mật khẩu mới không khớp." };
 
   const result = await changePassword(user.id, current, next);
   if (!result.ok) return { error: result.error };
   await setSessionCookie(result.token, result.expiresAt);
-  redirect(user.consented ? "/" : "/dong-y");
-}
-
-export async function consentAction() {
-  const user = await requireUser("consent");
-  await recordConsent(user.id);
   redirect("/");
 }
 

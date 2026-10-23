@@ -3,7 +3,7 @@
 Quản lý ca trudo và chiên. Thiết kế đã duyệt: `~/.gstack/projects/seedling/thangtc-unknown-design-20261018-125949.md`.
 
 > **Chỉ dùng dữ liệu giả** cho tới khi qua cổng pháp lý (design doc, phần Dependencies): dữ liệu tôn giáo gắn với
-> người thật là dữ liệu cá nhân nhạy cảm (NĐ 13/2023, Luật BVDLCN 2025). Văn bản ở `/dong-y` là bản nháp.
+> người thật là dữ liệu cá nhân nhạy cảm (NĐ 13/2023, Luật BVDLCN 2025).
 
 ## Chạy local
 

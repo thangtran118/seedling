@@ -22,7 +22,6 @@ export type SessionUser = {
   role: "member" | "area_leader";
   areaId: string;
   mustChangePassword: boolean;
-  consented: boolean;
 };
 
 export type LoginResult =
@@ -38,7 +37,6 @@ function toSessionUser(u: typeof users.$inferSelect): SessionUser {
     role: u.role,
     areaId: u.areaId,
     mustChangePassword: u.mustChangePassword,
-    consented: u.consentedAt !== null,
   };
 }
 
@@ -129,13 +127,25 @@ export async function revokeAllSessions(userId: string) {
 export type ChangePasswordResult = { ok: true; token: string; expiresAt: Date } | { ok: false; error: string };
 
 // Revokes every session (all devices), then issues a fresh one for the current device.
-export async function changePassword(userId: string, current: string, next: string): Promise<ChangePasswordResult> {
+// `current` is null for the forced first-login change: the session was opened with the temporary password, so it
+// is not asked again, but only while that temporary password is still valid.
+export async function changePassword(
+  userId: string,
+  current: string | null,
+  next: string,
+): Promise<ChangePasswordResult> {
   const [user] = await db.select().from(users).where(eq(users.id, userId));
-  if (!user || !(await verify(user.passwordHash, current)))
+  if (!user) return { ok: false, error: "Mật khẩu hiện tại không đúng." };
+  if (current === null) {
+    if (!user.mustChangePassword) return { ok: false, error: "Mật khẩu hiện tại không đúng." };
+    if (user.tempPasswordExpiresAt && user.tempPasswordExpiresAt < new Date())
+      return { ok: false, error: "Mật khẩu tạm đã hết hạn. Hãy nhờ khu vực trưởng cấp lại." };
+  } else if (!(await verify(user.passwordHash, current))) {
     return { ok: false, error: "Mật khẩu hiện tại không đúng." };
+  }
   const policyError = checkPasswordPolicy(next);
   if (policyError) return { ok: false, error: policyError };
-  if (next === current) return { ok: false, error: "Mật khẩu mới phải khác mật khẩu hiện tại." };
+  if (await verify(user.passwordHash, next)) return { ok: false, error: "Mật khẩu mới phải khác mật khẩu hiện tại." };
 
   await db
     .update(users)
@@ -143,8 +153,4 @@ export async function changePassword(userId: string, current: string, next: stri
     .where(eq(users.id, userId));
   await revokeAllSessions(userId);
   return { ok: true, ...(await createSession(userId)) };
-}
-
-export async function recordConsent(userId: string) {
-  await db.update(users).set({ consentedAt: new Date() }).where(eq(users.id, userId));
 }
