@@ -8,7 +8,7 @@ Trình duyệt ──HTTPS──▶ Vercel (Next.js, region sin1 Singapore) ─�
 
 - Domain `seedling.tranchienthang.com`: Vercel tự cấp và gia hạn chứng chỉ HTTPS.
 - Migration tự chạy mỗi lần deploy **production** (`pnpm vercel-build` trong `vercel.json`), trước bước build.
-- Không có backup. Neon Free vẫn cho khôi phục về thời điểm trong vài giờ gần nhất, xem mục 7.
+- Không có backup. Neon Free vẫn cho khôi phục về thời điểm trong vài giờ gần nhất, xem mục 8. Muốn xóa sạch DB: mục 7.
 - Prod **không có dữ liệu mẫu**. `pnpm db:seed` từ chối chạy vào DB không phải local.
 
 > **Lưu ý pháp lý.** README ghi: chỉ dùng dữ liệu giả cho tới khi qua cổng pháp lý. Dữ liệu tôn giáo gắn với người thật
@@ -151,13 +151,40 @@ psql "$NEON_URL"                                                     # mở psql
 
 Log app: Vercel → project → **Logs**.
 
-## 7. Khôi phục khi lỡ tay
+## 7. Xóa sạch database (reset)
+
+Xóa **toàn bộ** dữ liệu trên prod (khu vực, thánh đồ, chiên, ca, log) và tạo lại bảng trống, như lúc vừa deploy lần đầu.
+Mọi người bị đăng xuất. Không lấy lại được, trừ khi còn trong khoảng khôi phục ở mục 8.
+
+1. Xóa ba schema của app: `public` (các bảng chính), `private` (dữ liệu riêng tư) và `drizzle` (lịch sử migration, để
+   migration chạy lại từ đầu). Chạy trong **SQL Editor** của Neon, hoặc bằng `psql "$NEON_URL"`:
+
+   ```sql
+   BEGIN;
+   DROP SCHEMA IF EXISTS private CASCADE;
+   DROP SCHEMA IF EXISTS drizzle CASCADE;
+   DROP SCHEMA public CASCADE;
+   CREATE SCHEMA public;
+   COMMIT;
+   ```
+
+2. Tạo lại bảng ngay, đừng chờ lần deploy sau. Trong lúc chưa có bảng, app báo lỗi với mọi người đang mở:
+
+   ```bash
+   DATABASE_URL="$NEON_URL" pnpm db:migrate
+   ```
+
+3. Tạo lại khu vực trưởng đầu tiên như mục 4, Cách A.
+
+**Không** dùng `pnpm db:seed` để reset prod: lệnh đó nạp dữ liệu giả, và đã bị chặn với DB không phải local.
+
+## 8. Khôi phục khi lỡ tay
 
 Không có backup định kỳ. Neon Free giữ lịch sử thay đổi trong một khoảng ngắn (vài giờ, xem **Settings → Instant
 restore** trong Neon Console). Nếu vừa xóa nhầm dữ liệu, vào **Backup & Restore** của branch `main` và khôi phục về thời
 điểm trước khi xóa. Quá khoảng đó thì không lấy lại được.
 
-## 8. Sự cố thường gặp
+## 9. Sự cố thường gặp
 
 | Hiện tượng | Nguyên nhân / cách xử lý |
 |---|---|
