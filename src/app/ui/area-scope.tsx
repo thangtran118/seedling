@@ -16,6 +16,9 @@ export const VIEWS: { key: View; label: string }[] = [
   { key: "dia-vuc", label: "Địa vực" },
 ];
 
+export const viewsFor = (user: SessionUser) =>
+  user.areaId === null ? VIEWS.filter((v) => v.key !== "khu-vuc") : VIEWS;
+
 export type ViewScope = {
   view: View;
   fallback: View; // the page's default tab, left out of the URL
@@ -29,8 +32,11 @@ export function resolveView(
   params: { xem?: string; kv?: string },
   fallback: View,
 ): ViewScope {
-  const view = VIEWS.find((v) => v.key === params.xem)?.key ?? fallback;
-  if (view === "khu-vuc") return { view, fallback, areaId: user.areaId, kv: "" };
+  // The region leader belongs to no area: no Khu vực tab, and a page defaulting to it opens on Địa vực.
+  const own = user.areaId;
+  if (own === null && fallback === "khu-vuc") fallback = "dia-vuc";
+  const view = viewsFor(user).find((v) => v.key === params.xem)?.key ?? fallback;
+  if (view === "khu-vuc" && own !== null) return { view, fallback, areaId: own, kv: "" };
   if (view === "dia-vuc" && isRegionLeader(user)) {
     const picked = areas.find((a) => String(a.id) === params.kv);
     if (picked) return { view, fallback, areaId: picked.id, kv: String(picked.id) };
@@ -50,7 +56,7 @@ export function viewQuery(scope: ViewScope, next: { view?: View; kv?: string }, 
   return s ? `?${s}` : "";
 }
 
-// Three equal tabs; counts optional. Under them, for the region leader on the Địa vực tab only, one chip per area.
+// Three equal tabs (two for the region leader); counts optional. Under them, for the region leader on the Địa vực tab only, one chip per area.
 export function ViewTabs({
   user,
   areas,
@@ -65,11 +71,12 @@ export function ViewTabs({
   counts?: Record<View, number>;
 }) {
   const pickArea = scope.view === "dia-vuc" && isRegionLeader(user) && areas.length > 1;
+  const tabs = viewsFor(user);
   return (
     <div className="flex flex-col gap-2">
       <nav aria-label="Xem" className="md:max-w-xl">
-        <ul className="grid grid-cols-3 gap-1 rounded-xl bg-sunken p-1">
-          {VIEWS.map((v) => {
+        <ul className={`grid ${tabs.length === 3 ? "grid-cols-3" : "grid-cols-2"} gap-1 rounded-xl bg-sunken p-1`}>
+          {tabs.map((v) => {
             const on = v.key === scope.view;
             return (
               <li key={v.key}>
@@ -119,8 +126,8 @@ export function ViewTabs({
   );
 }
 
-export const sessionInView = (scope: ViewScope, s: { isMember: boolean; areaIds: number[] }) =>
-  scope.view === "cua-toi" ? s.isMember : scope.areaId === undefined || s.areaIds.includes(scope.areaId);
+export const sessionInView = (scope: ViewScope, s: { isMember: boolean; areaIds: number[]; allAreas: boolean }) =>
+  scope.view === "cua-toi" ? s.isMember : scope.areaId === undefined || s.allAreas || s.areaIds.includes(scope.areaId);
 
 export const listenerInView = (scope: ViewScope, l: { mine: boolean; area: { id: number } }) =>
   scope.view === "cua-toi" ? l.mine : scope.areaId === undefined || l.area.id === scope.areaId;
@@ -137,7 +144,7 @@ export function viewCounts<T>(
     const sc = resolveView(user, areas, { xem: view, kv: scope.kv }, scope.fallback);
     return items.filter((i) => inView(sc, i)).length;
   };
-  return { "cua-toi": of("cua-toi"), "khu-vuc": of("khu-vuc"), "dia-vuc": of("dia-vuc") };
+  return { "cua-toi": of("cua-toi"), "khu-vuc": user.areaId === null ? 0 : of("khu-vuc"), "dia-vuc": of("dia-vuc") };
 }
 
 // One chip per area of the region (the viewer's own first), for the region leader's Thành viên screen.

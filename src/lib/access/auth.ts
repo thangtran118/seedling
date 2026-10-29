@@ -19,7 +19,7 @@ export type SessionUser = {
   id: number;
   name: string;
   role: "member" | "area_leader" | "region_leader";
-  areaId: number;
+  areaId: number | null; // null for the region leader, who belongs to no area
   regionId: number;
   mustChangePassword: boolean;
 };

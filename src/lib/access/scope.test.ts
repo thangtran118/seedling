@@ -23,8 +23,8 @@ const viewers: Record<string, Viewer> = {
   memberOther: { id: 2, role: "member", areaId: 2, regionId: REGION },
   leaderSame: { id: 3, role: "area_leader", areaId: 1, regionId: REGION },
   leaderOther: { id: 4, role: "area_leader", areaId: 2, regionId: REGION },
-  regionLeader: { id: 5, role: "region_leader", areaId: 2, regionId: REGION }, // home area 2, not the listener's
-  otherRegion: { id: 6, role: "region_leader", areaId: 9, regionId: 2 },
+  regionLeader: { id: 5, role: "region_leader", areaId: null, regionId: REGION }, // belongs to no area
+  otherRegion: { id: 6, role: "region_leader", areaId: null, regionId: 2 },
 };
 const listener = { areaId: 1, regionId: REGION };
 
@@ -60,7 +60,7 @@ describe("accounts and stats of area 1", () => {
   check("manages a member", (v) => canManageMember(v, member), only("leaderSame", "regionLeader"));
   check("manages the area leader", (v) => canManageMember(v, leader), only("regionLeader"));
   check("sees one member's stats", (v) => leadsArea(v, member), only("leaderSame", "regionLeader"));
-  check("leads the region leader's home area 2", (v) => leadsArea(v, { areaId: 2, regionId: REGION }), {
+  check("leads area 2", (v) => leadsArea(v, { areaId: 2, regionId: REGION }), {
     ...only("leaderOther", "regionLeader"),
   });
 
@@ -70,6 +70,12 @@ describe("accounts and stats of area 1", () => {
       (e: unknown) => e instanceof AccessError && e.code === "not_found",
     );
   });
+});
+
+describe("a session the region leader created (no area)", () => {
+  const session = { areaId: null, regionId: REGION };
+  check("is in the region", (v) => inRegion(v, session), { ...all(true), otherRegion: false });
+  check("is led by", (v) => leadsArea(v, session), only("regionLeader"));
 });
 
 describe("region management", () => {

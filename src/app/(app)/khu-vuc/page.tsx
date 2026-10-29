@@ -30,8 +30,8 @@ async function Areas() {
   const candidatesFor = (areaId: number) =>
     people
       .filter((p) => p.role === "member")
-      .sort((a, b) => Number(b.area.id === areaId) - Number(a.area.id === areaId))
-      .map((p) => ({ id: p.id, label: p.area.id === areaId ? p.name : `${p.name} · ${p.area.name}` }));
+      .sort((a, b) => Number(b.area?.id === areaId) - Number(a.area?.id === areaId))
+      .map((p) => ({ id: p.id, label: p.area?.id === areaId ? p.name : `${p.name} · ${p.area?.name}` }));
   return (
     <>
       <Section title="Thêm khu vực">

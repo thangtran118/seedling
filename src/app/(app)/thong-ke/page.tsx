@@ -31,7 +31,9 @@ async function Stats({ searchParams }: { searchParams: PageProps<"/thong-ke">["s
   const now = new Date();
   const areas = await listRegionAreas(user);
   const scope = resolveView(user, areas, { xem: firstParam(sp.xem), kv: firstParam(sp.kv) }, "cua-toi");
-  const tableArea = scope.areaId ?? user.areaId;
+  // The member table is one area's: the shown one, else the viewer's own. The region leader, who belongs to no area,
+  // gets it once they pick an area on the Địa vực tab.
+  const tableArea = scope.areaId ?? user.areaId ?? undefined;
   const areaName = (id: number) => areas.find((a) => a.id === id)?.name ?? "Khu vực";
   const [overview, table] = await Promise.all([
     scope.view === "cua-toi"
@@ -39,7 +41,7 @@ async function Stats({ searchParams }: { searchParams: PageProps<"/thong-ke">["s
       : scope.areaId !== undefined
         ? areaStats(user, now, scope.areaId).then((a) => a.overview)
         : regionStats(user, now).then((a) => a.overview),
-    memberMonthTable(user, now, tableArea),
+    tableArea === undefined ? null : memberMonthTable(user, now, tableArea),
   ]);
   const title =
     scope.view === "cua-toi" ? "Của tôi" : scope.areaId !== undefined ? areaName(scope.areaId) : "Cả địa vực";
@@ -50,13 +52,15 @@ async function Stats({ searchParams }: { searchParams: PageProps<"/thong-ke">["s
         <OverviewTiles st={overview} />
       </Section>
 
-      <Section title={`Thành viên ${areaName(tableArea)} · tháng này`}>
-        <MemberMonthTable
-          rows={table}
-          viewerId={user.id}
-          linkRows={leadsArea(user, { areaId: tableArea, regionId: user.regionId })}
-        />
-      </Section>
+      {tableArea !== undefined && table && (
+        <Section title={`Thành viên ${areaName(tableArea)} · tháng này`}>
+          <MemberMonthTable
+            rows={table}
+            viewerId={user.id}
+            linkRows={leadsArea(user, { areaId: tableArea, regionId: user.regionId })}
+          />
+        </Section>
+      )}
     </>
   );
 }

@@ -5,7 +5,7 @@ import { and, asc, eq, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { areas, listenerLinks, sessionMembers, users } from "@/db/schema";
 import { normalizePhone } from "@/lib/phone";
-import { loadAreaInRegion } from "./areas";
+import { pickedOrOwnArea } from "./areas";
 import { revokeAllSessions, type SessionUser } from "./auth";
 import { invalidError, notFoundError } from "./errors";
 import { requireCanManageMember, requireLeader, requireLeadsArea } from "./scope";
@@ -16,7 +16,7 @@ export type RegionMember = {
   id: number;
   name: string;
   role: SessionUser["role"];
-  area: { id: number; name: string };
+  area: { id: number; name: string } | null; // null: the region leader, who belongs to no area
 };
 
 export type MemberAdminView = Omit<RegionMember, "area"> & {
@@ -28,7 +28,7 @@ export type MemberAdminView = Omit<RegionMember, "area"> & {
 
 // A person's name in a picker, with their area when it is not the viewer's.
 export const memberLabel = (viewer: SessionUser, m: RegionMember) =>
-  m.area.id === viewer.areaId ? m.name : `${m.name} · ${m.area.name}`;
+  !m.area ? `${m.name} · Địa vực trưởng` : m.area.id === viewer.areaId ? m.name : `${m.name} · ${m.area.name}`;
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -38,11 +38,15 @@ export async function listRegionMembers(viewer: SessionUser): Promise<RegionMemb
   const rows = await db
     .select({ id: users.id, name: users.name, role: users.role, areaId: areas.id, areaName: areas.name })
     .from(users)
-    .innerJoin(areas, eq(areas.id, users.areaId))
+    .leftJoin(areas, eq(areas.id, users.areaId))
     .where(and(eq(users.regionId, viewer.regionId), eq(users.active, true)))
     .orderBy(asc(areas.name), asc(users.name));
-  const people = rows.map(({ areaId, areaName, ...u }) => ({ ...u, area: { id: areaId, name: areaName } }));
-  return [...people.filter((p) => p.area.id === viewer.areaId), ...people.filter((p) => p.area.id !== viewer.areaId)];
+  const people = rows.map(({ areaId, areaName, ...u }) => ({
+    ...u,
+    area: areaId === null || areaName === null ? null : { id: areaId, name: areaName },
+  }));
+  const own = (p: RegionMember) => p.area !== null && p.area.id === viewer.areaId;
+  return [...people.filter(own), ...people.filter((p) => !own(p))];
 }
 
 // Readable temporary password: 4 letters + 4 digits, no ambiguous characters.
@@ -62,11 +66,12 @@ async function loadMember(viewer: SessionUser, userId: number) {
   return user;
 }
 
-// The accounts of one area (the viewer's own by default), for its leaders.
-export async function listMembersForAdmin(viewer: SessionUser, areaId = viewer.areaId): Promise<MemberAdminView[]> {
+// The accounts of one area (the viewer's own by default; the region leader always picks one), for its leaders.
+export async function listMembersForAdmin(viewer: SessionUser, areaId?: number): Promise<MemberAdminView[]> {
   requireLeader(viewer);
-  requireLeadsArea(viewer, { areaId, regionId: (await loadAreaInRegion(viewer, areaId)).regionId });
-  const rows = await db.select().from(users).where(eq(users.areaId, areaId)).orderBy(asc(users.name));
+  const area = await pickedOrOwnArea(viewer, areaId);
+  requireLeadsArea(viewer, { areaId: area.id, regionId: area.regionId });
+  const rows = await db.select().from(users).where(eq(users.areaId, area.id)).orderBy(asc(users.name));
   return rows.map((u) => ({
     id: u.id,
     name: u.name,
@@ -114,7 +119,7 @@ export async function insertMember(
 // A leader adds a member to an area they lead (an area leader: their own; the region leader: any area of the region).
 export async function createMember(viewer: SessionUser, input: { name: string; phone: string; areaId?: number }) {
   requireLeader(viewer);
-  const area = await loadAreaInRegion(viewer, input.areaId ?? viewer.areaId);
+  const area = await pickedOrOwnArea(viewer, input.areaId);
   requireLeadsArea(viewer, { areaId: area.id, regionId: area.regionId });
   const { phone, tempPassword } = await db.transaction((tx) => insertMember(tx, viewer, area, input));
   return { phone, tempPassword };

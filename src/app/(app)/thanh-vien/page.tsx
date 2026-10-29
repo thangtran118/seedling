@@ -31,19 +31,15 @@ async function Members({ searchParams }: { searchParams: PageProps<"/thanh-vien"
   const regionLeader = isRegionLeader(user);
   const areas = await listRegionAreas(user);
   const kv = regionLeader ? firstParam((await searchParams).kv) : undefined;
-  const areaId = areas.find((a) => String(a.id) === kv)?.id ?? user.areaId;
+  // The region leader belongs to no area: their list opens on the first area.
+  const areaId = areas.find((a) => String(a.id) === kv)?.id ?? user.areaId ?? areas[0]?.id;
+  if (areaId === undefined) return <p className="text-sm text-muted">Địa vực chưa có khu vực nào.</p>;
   const members = await listMembersForAdmin(user, areaId);
   const moveTo = regionLeader ? areas.filter((a) => a.id !== areaId) : [];
   const areaName = areas.find((a) => a.id === areaId)?.name ?? "Khu vực";
   return (
     <>
-      {regionLeader && (
-        <AreaChips
-          areas={areas}
-          current={areaId}
-          href={(id) => (id === user.areaId ? "/thanh-vien" : `/thanh-vien?kv=${id}`)}
-        />
-      )}
+      {regionLeader && <AreaChips areas={areas} current={areaId} href={(id) => `/thanh-vien?kv=${id}`} />}
       <Section title={`Tạo tài khoản · ${areaName}`}>
         <CreateMemberForm key={areaId} areaId={areaId} />
       </Section>

@@ -28,7 +28,8 @@ import type { SessionUser } from "./auth";
 import { completedAt } from "./phase";
 import { forbiddenError, invalidError } from "./errors";
 import { cleanNoteBody, notesFor, type ListenerNote } from "./notes";
-import { canAddLinks, canRemoveLinks, canSeeContact, inRegion, requireInRegion } from "./scope";
+import { pickedOrOwnArea } from "./areas";
+import { canAddLinks, canRemoveLinks, canSeeContact, inRegion, isRegionLeader, requireInRegion } from "./scope";
 
 // ---------- DTOs: the only listener shapes that leave the access layer ----------
 
@@ -422,11 +423,13 @@ function validateListenerInput(input: ListenerInput) {
 
 const hasAny = (p: ListenerPrivateFields) => Object.values(p).some((v) => v !== null);
 
+// The listener belongs to the creator's area; the region leader, who belongs to none, picks one (areaId).
 export async function createListener(
   viewer: SessionUser,
-  input: ListenerInput & { progress?: Progress; note?: string | null },
+  input: ListenerInput & { progress?: Progress; note?: string | null; areaId?: number },
 ): Promise<number> {
   const clean = validateListenerInput(input);
+  const area = await pickedOrOwnArea(viewer, isRegionLeader(viewer) ? input.areaId : undefined);
   // The first note can be written with the new listener; later ones are added on the listener page.
   const note = input.note?.trim() ? cleanNoteBody(input.note) : null;
   // A listener may be added part-way: at lesson N of their route, or already báptem / từ chối.
@@ -441,8 +444,8 @@ export async function createListener(
     const [row] = await tx
       .insert(listeners)
       .values({
-        areaId: viewer.areaId,
-        regionId: viewer.regionId,
+        areaId: area.id,
+        regionId: area.regionId,
         name: clean.name,
         birthYear: clean.birthYear,
         manualStatus,

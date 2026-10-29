@@ -6,12 +6,13 @@
 //   member of the region; nothing crosses regions.
 // - A listener's contact fields: its người đồng hành, the leader of the listener's area, the region leader.
 // - Editing stays with the people linked to the listener (decision 2026-10-18); leaders get no edit right from this.
-// - The region leader (địa vực trưởng) leads their home area like any area leader, and every area of the region.
+// - The region leader (địa vực trưởng) oversees every area of the region and belongs to none (areaId null).
 import type { SessionUser } from "./auth";
 import { forbiddenError, notFoundError } from "./errors";
 
 export type Viewer = Pick<SessionUser, "id" | "role" | "areaId" | "regionId">;
-export type Placed = { areaId: number; regionId: number };
+// areaId null: the region leader's account, or a session they created (it belongs to every area).
+export type Placed = { areaId: number | null; regionId: number };
 
 export const isRegionLeader = (v: Viewer) => v.role === "region_leader";
 export const isLeader = (v: Viewer) => v.role === "area_leader" || v.role === "region_leader";
@@ -20,7 +21,7 @@ export const inRegion = (v: Viewer, t: { regionId: number }) => t.regionId === v
 
 // Leads the area `t` is in: its own area leader, or the leader of the region holding it.
 export const leadsArea = (v: Viewer, t: Placed) =>
-  inRegion(v, t) && (isRegionLeader(v) || (v.role === "area_leader" && t.areaId === v.areaId));
+  inRegion(v, t) && (isRegionLeader(v) || (v.role === "area_leader" && t.areaId !== null && t.areaId === v.areaId));
 
 export const canSeeContact = (v: Viewer, listener: Placed, linked: boolean) =>
   inRegion(v, listener) && (linked || leadsArea(v, listener));

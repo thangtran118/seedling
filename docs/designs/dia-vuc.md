@@ -45,7 +45,10 @@ Các khu vực khác chưa dùng app. Ca trudo chéo khu vực hiện không ghi
    - `areas.region_id` NOT NULL; enum `role` có thêm `region_leader`.
    - Tài khoản ĐVT được thêm trực tiếp vào DB, qua lệnh operator trong `scripts/admin.ts`, app không có UI cho việc này.
    - Hiện chỉ triển khai một địa vực.
-2. **ĐVT thuộc một khu vực nhà và là KVT của khu vực đó**: quản lý thánh đồ ở đó như mọi KVT, cộng thêm quyền địa vực.
+2. **ĐVT quản lý chung mọi khu vực và không thuộc khu vực nào** (sửa 2026-10-29, thay cho "ĐVT là KVT của khu vực nhà"). `users.area_id` để trống với ĐVT (CHECK `users_area_by_role`).
+   - Ca do ĐVT tạo có `sessions.area_id` trống và thuộc mọi khu vực của địa vực.
+   - Chiên do ĐVT tạo: ĐVT bắt buộc chọn khu vực cho chiên.
+   - Trên Hôm nay / Lịch / Chiên / Thống kê, ĐVT chỉ có 2 tab: Của tôi / Địa vực (ô chọn khu vực nằm trong tab Địa vực).
 3. **Mọi thánh đồ trong địa vực xem được** ca trudo, lịch sử hẹn gặp, lịch sử ghi chú chiên và tóm tắt sau ca (`session_private.summary`), ở mọi khu vực.
    - Thánh đồ được tham gia ca khu vực khác, và chọn chiên hoặc người đi cùng thuộc khu vực khác.
    - Chỉ người đồng hành (gồm người tạo chiên) mới được thêm ghi chú (`addNote` đã đúng sẵn). Chỉ người viết mới sửa hoặc xoá ghi chú của mình.
@@ -100,10 +103,10 @@ ALTER TYPE role ADD VALUE 'region_leader';
 **Giá trị enum mới không được xuất hiện ở bất kỳ câu SQL nào của migration.** Drizzle chạy mọi migration đang chờ trong một transaction duy nhất (`drizzle-orm/pg-core/dialect.js`, `migrate` → `session.transaction`). Postgres lại không cho dùng giá trị enum vừa `ADD VALUE` trong cùng transaction đó. Tách sang `0012` cũng không giúp gì, vì cả hai file vẫn chạy chung một transaction. Do đó:
 
 ```sql
--- Mỗi khu vực tối đa một trưởng (ĐVT là trưởng của khu vực nhà).
--- Dùng `role <> 'member'` (giá trị cũ) thay cho IN ('area_leader','region_leader').
+-- Mỗi khu vực tối đa một KVT (ĐVT không làm trưởng khu vực nào). 'area_leader' là giá trị cũ của enum,
+-- nên dùng được trong cùng transaction (migration 0012).
 CREATE UNIQUE INDEX one_leader_per_area ON users (area_id)
-  WHERE role <> 'member' AND active;
+  WHERE role = 'area_leader' AND active;
 ```
 
 Không có index "một ĐVT mỗi địa vực". Tài khoản `region_leader` chỉ tạo được qua lệnh operator `pnpm admin region-leader`, và lệnh này từ chối nếu địa vực đã có ĐVT đang hoạt động. Không đường nào trong app ghi `region_leader`. Phải test: chạy `pnpm db:migrate` trên một DB có `0011` đang chờ.
@@ -140,7 +143,6 @@ Thêm một dòng cho người ở địa vực khác (`regionId` khác): mọi 
 
 Các ca test bắt buộc thêm:
 - người đồng hành khu vực A thêm ghi chú cho chiên khu vực B: được phép;
-- `assignAreaLeader` vào khu vực nhà của ĐVT: bị từ chối;
 - `assignAreaLeader` với người đang là KVT khu vực khác: bị từ chối.
 
 ### `SessionUser` (`src/lib/access/auth.ts:18`)
@@ -181,10 +183,9 @@ Thêm `regionId`, đọc từ `users.region_id`. `role` thêm `"region_leader"`.
   - `createArea(name)`, `renameArea(id, name)`.
   - `deleteArea(id)`: chỉ được khi khu vực không còn user, chiên hay ca nào.
   - `assignAreaLeader(areaId, userId)`: trong một transaction, hạ KVT cũ (nếu có) thành `member` rồi nâng người mới. Người được chọn phải là thánh đồ thường (`role = member`), đang hoạt động, cùng địa vực. Nếu người đó ở khu vực khác thì được chuyển sang khu vực này trong cùng transaction, theo đúng luật của `moveMember`. Các trường hợp bị từ chối:
-    - khu vực đích là khu vực nhà của ĐVT: "Khu vực nhà của địa vực trưởng do địa vực trưởng làm trưởng.";
     - người được chọn đang là KVT khu vực khác: "Người này đang là trưởng khu vực Y. Gán trưởng mới cho khu vực Y trước.";
     - người được chọn là ĐVT.
-  - `createAreaLeader(areaId, name, phone)`: tạo tài khoản rồi gán làm KVT (cùng luật từ chối với khu vực nhà của ĐVT), trả mật khẩu tạm như `createMember`.
+  - `createAreaLeader(areaId, name, phone)`: tạo tài khoản rồi gán làm KVT (cùng luật từ chối), trả mật khẩu tạm như `createMember`.
   - `moveMember(userId, areaId)`: chặn nếu người đó đang là KVT (phải gán KVT mới trước) hoặc là ĐVT. Khi chuyển:
     - **Chiên ở lại khu vực cũ.** `listeners.area_id` không đổi. Người chuyển vẫn là người đồng hành nên vẫn xem được liên lạc và vẫn sửa được như trước. KVT khu vực cũ vẫn xem liên lạc chiên đó; KVT khu vực mới thì không.
     - Ca đã có giữ `area_id` cũ. Theo luật "thuộc khu vực" ở trên, ca đó hiện ở cả hai khu vực vì người chuyển là người đi cùng.
@@ -197,7 +198,7 @@ Thêm `regionId`, đọc từ `users.region_id`. `role` thêm `"region_leader"`.
   - `memberStats` / `memberMonthTable` dùng `requireLeadsArea`. Trên trang thống kê, ĐVT có ô chọn khu vực.
 - **`scripts/admin.ts`:**
   - `bootstrap` nhận thêm `--region` (tạo hoặc dùng địa vực có sẵn).
-  - Lệnh mới `region-leader --phone <sđt>`: nâng một tài khoản có sẵn lên `region_leader`, đồng thời hạ KVT hiện tại của khu vực nhà nếu có. Lệnh từ chối nếu địa vực đã có ĐVT đang hoạt động; phải hạ ĐVT cũ trước bằng `--replace`.
+  - Lệnh mới `region-leader --phone <sđt>`: nâng một tài khoản có sẵn lên `region_leader` và bỏ khu vực của người đó. Nếu người đó đang là KVT, khu vực của họ tạm chưa có KVT cho đến khi ĐVT gán người mới ở `/khu-vuc`. Lệnh từ chối nếu địa vực đã có ĐVT đang hoạt động, trừ khi có `--replace --area "<khu vực>"`: khi đó ĐVT cũ thành thánh đồ của khu vực đó.
   - Đây là cách "thêm trực tiếp vào DB" duy nhất cho ĐVT.
 
 ### Giao diện
@@ -211,7 +212,7 @@ Thêm `regionId`, đọc từ `users.region_id`. `role` thêm `"region_leader"`.
 
 ## Open Questions
 
-1. (Đã chốt trong `assignAreaLeader`: từ chối gán KVT cho khu vực nhà của ĐVT.) Hỏi lại ĐVT xem đúng thực tế không.
+1. (Đã chốt 2026-10-29: ĐVT không làm trưởng khu vực nào; khu vực của ĐVT có KVT riêng.)
 2. Thánh đồ khu vực A tự tạo chiên trong lúc trudo ở khu vực B: chiên thuộc khu vực nào? Thiết kế hiện tại cho chiên thuộc khu vực của người tạo (A). Nếu ngoài đời chiên thuộc khu vực nơi chiên sống, thì cần ô chọn khu vực khi tạo chiên.
 3. KVT có được thêm người đồng hành vào chiên của khu vực mình không, khi KVT không liên kết với chiên đó? Hiện tại có (`canManageLinks`), và thiết kế giữ nguyên.
 

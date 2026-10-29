@@ -16,10 +16,9 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export type AreaAdminView = {
   id: number;
   name: string;
-  leader: { id: number; name: string; role: SessionUser["role"] } | null; // null: no leader yet
+  leader: { id: number; name: string } | null; // null: no area leader yet
   members: number; // active accounts, the leader included
   listeners: number;
-  isHome: boolean; // the region leader's own area, which they lead themselves
   deletable: boolean; // never used: no account (even deactivated), listener or session
 };
 
@@ -52,16 +51,15 @@ export async function listAreas(viewer: SessionUser): Promise<AreaAdminView[]> {
   ]);
   return rows.map((a) => {
     const inArea = people.filter((p) => p.areaId === a.id);
-    const leader = inArea.find((p) => p.active && p.role !== "member");
+    const leader = inArea.find((p) => p.active && p.role === "area_leader");
     const nListeners = listenerCounts.find((c) => c.areaId === a.id)?.n ?? 0;
     const nSessions = sessionCounts.find((c) => c.areaId === a.id)?.n ?? 0;
     return {
       id: a.id,
       name: a.name,
-      leader: leader ? { id: leader.id, name: leader.name, role: leader.role } : null,
+      leader: leader ? { id: leader.id, name: leader.name } : null,
       members: inArea.filter((p) => p.active).length,
       listeners: nListeners,
-      isHome: a.id === viewer.areaId,
       deletable: inArea.length === 0 && nListeners === 0 && nSessions === 0,
     };
   });
@@ -90,7 +88,6 @@ export async function renameArea(viewer: SessionUser, areaId: number, name: stri
 export async function deleteArea(viewer: SessionUser, areaId: number) {
   requireRegionLeader(viewer);
   await loadAreaInRegion(viewer, areaId);
-  if (areaId === viewer.areaId) throw invalidError("Không thể xóa khu vực của địa vực trưởng.");
   await db.transaction(async (tx) => {
     const [[u], [l], [s]] = await Promise.all([
       tx.select({ n: count() }).from(users).where(eq(users.areaId, areaId)),
@@ -105,10 +102,7 @@ export async function deleteArea(viewer: SessionUser, areaId: number) {
 
 async function loadTargetArea(viewer: SessionUser, areaId: number) {
   requireRegionLeader(viewer);
-  const area = await loadAreaInRegion(viewer, areaId);
-  // The region leader leads their home area themselves (one leader per area).
-  if (area.id === viewer.areaId) throw invalidError("Khu vực nhà của địa vực trưởng do địa vực trưởng làm trưởng.");
-  return area;
+  return loadAreaInRegion(viewer, areaId);
 }
 
 // Makes `userId` the leader of `areaId`, in one transaction: the area's current leader (if any) becomes a member,
@@ -117,9 +111,9 @@ async function loadTargetArea(viewer: SessionUser, areaId: number) {
 async function promote(tx: Tx, viewer: SessionUser, area: { id: number; name: string }, userId: number) {
   const [target] = await tx.select().from(users).where(eq(users.id, userId)).for("update");
   if (!target || !target.active || !inRegion(viewer, target)) throw notFoundError("Không tìm thấy thành viên.");
-  if (target.role === "region_leader") throw invalidError("Địa vực trưởng không làm trưởng khu vực khác.");
+  if (target.role === "region_leader") throw invalidError("Địa vực trưởng không làm khu vực trưởng.");
   if (target.role === "area_leader") {
-    if (target.areaId === area.id) return;
+    if (target.areaId === area.id || target.areaId === null) return;
     const [other] = await tx.select({ name: areas.name }).from(areas).where(eq(areas.id, target.areaId));
     throw invalidError(
       `Người này đang là trưởng ${other?.name ?? "khu vực khác"}. Gán trưởng mới cho khu vực đó trước.`,

@@ -10,7 +10,6 @@ import {
   renameAreaAction,
 } from "@/app/actions/regions";
 import type { AreaAdminView } from "@/lib/access/regions";
-import { roleLabel } from "@/lib/access/scope";
 import { INPUT } from "./kit";
 import { StateLine } from "./members-admin";
 
@@ -64,7 +63,7 @@ export function AreaRow({ area, candidates }: { area: AreaAdminView; candidates:
       <p className="mt-0.5 text-sm text-muted">
         {area.leader ? (
           <>
-            {roleLabel(area.leader.role)}: <b className="text-ink">{area.leader.name}</b>
+            Khu vực trưởng: <b className="text-ink">{area.leader.name}</b>
           </>
         ) : (
           <span className="font-medium text-danger">Chưa có khu vực trưởng</span>
@@ -72,19 +71,15 @@ export function AreaRow({ area, candidates }: { area: AreaAdminView; candidates:
       </p>
 
       <div className="mt-2 flex flex-wrap gap-2">
-        <Link href={`/thanh-vien?kv=${area.isHome ? "" : area.id}`} className={`${small} inline-flex items-center`}>
+        <Link href={`/thanh-vien?kv=${area.id}`} className={`${small} inline-flex items-center`}>
           Thành viên
         </Link>
-        {!area.isHome && (
-          <>
-            <button type="button" className={small} aria-expanded={panel === "assign"} onClick={() => toggle("assign")}>
-              Gán khu vực trưởng
-            </button>
-            <button type="button" className={small} aria-expanded={panel === "create"} onClick={() => toggle("create")}>
-              Tạo tài khoản trưởng
-            </button>
-          </>
-        )}
+        <button type="button" className={small} aria-expanded={panel === "assign"} onClick={() => toggle("assign")}>
+          Gán khu vực trưởng
+        </button>
+        <button type="button" className={small} aria-expanded={panel === "create"} onClick={() => toggle("create")}>
+          Tạo tài khoản trưởng
+        </button>
         <button type="button" className={small} aria-expanded={panel === "rename"} onClick={() => toggle("rename")}>
           Đổi tên
         </button>

@@ -35,15 +35,16 @@ async function main() {
   const inA = { areaId: area.id, regionId: region.id };
   const inB = { areaId: areaB.id, regionId: region.id };
 
-  // The region leader leads area B, their home area.
+  // The region leader belongs to no area; area B has its own leader.
   const people = [
     { name: "Trưởng Khu Vực", phone: "0900000001", role: "area_leader" as const, ...inA },
     { name: "ae An", phone: "0900000002", role: "member" as const, ...inA },
     { name: "ae Bình", phone: "0900000003", role: "member" as const, ...inA },
     { name: "ae Chi", phone: "0900000004", role: "member" as const, ...inA },
     { name: "ae Dũng", phone: "0900000005", role: "member" as const, ...inA },
-    { name: "Địa Vực Trưởng", phone: "0900000006", role: "region_leader" as const, ...inB },
+    { name: "Địa Vực Trưởng", phone: "0900000006", role: "region_leader" as const, areaId: null, regionId: region.id },
     { name: "ae Em", phone: "0900000007", role: "member" as const, ...inB },
+    { name: "Trưởng Khu B", phone: "0900000008", role: "area_leader" as const, ...inB },
   ];
   const users = await db
     .insert(s.users)
@@ -253,7 +254,7 @@ async function main() {
 
   console.log(
     `Seeded fake data. Area leader: ${leader.phone}, members: 0900000002..05, region leader: ${regionLeader.phone}, ` +
-      `area B member: ${em.phone}, password: ${DEV_PASSWORD}`,
+      `area B member: ${em.phone}, area B leader: 0900000008, password: ${DEV_PASSWORD}`,
   );
 }
 

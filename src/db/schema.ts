@@ -24,8 +24,8 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 const id = () => integer("id").primaryKey().generatedAlwaysAsIdentity();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
-// region_leader (địa vực trưởng) is also the leader of their own home area. It is only ever written by the operator
-// CLI (scripts/admin.ts region-leader); no SQL in a migration may name it (see drizzle/0011_regions.sql).
+// region_leader (địa vực trưởng) oversees every area of the region and belongs to none (users.area_id is null). It is
+// only ever written by the operator CLI (scripts/admin.ts region-leader).
 export const roleEnum = pgEnum("role", ["member", "area_leader", "region_leader"]);
 export const manualStatusEnum = pgEnum("manual_status", ["moi_quen", "goi_mo", "baptem", "tu_choi"]);
 export const sessionStateEnum = pgEnum("session_state", ["planned", "cancelled"]);
@@ -68,10 +68,11 @@ export const users = pgTable(
     phone: varchar("phone", { length: 20 }).notNull().unique(),
     passwordHash: text("password_hash").notNull(),
     name: varchar("name", { length: 100 }).notNull(),
-    areaId: integer("area_id")
+    // Null for the region leader only (check below); everyone else belongs to one area.
+    areaId: integer("area_id").references(() => areas.id),
+    regionId: integer("region_id")
       .notNull()
-      .references(() => areas.id),
-    regionId: integer("region_id").notNull(),
+      .references(() => regions.id),
     role: roleEnum("role").notNull().default("member"),
     mustChangePassword: boolean("must_change_password").notNull().default(true),
     tempPasswordExpiresAt: timestamp("temp_password_expires_at", { withTimezone: true }),
@@ -83,11 +84,12 @@ export const users = pgTable(
   },
   (t) => [
     areaRegionFk("users_area_region_fk", t),
-    // One leader per area (the region leader leads their home area). Written as "not member" so the predicate never
-    // names region_leader, which a migration adding that enum value could not use in the same transaction.
+    // Written with the older enum values only: a migration that adds region_leader cannot name it in its transaction.
+    check("users_area_by_role", sql`(${t.areaId} is null) = (${t.role} not in ('member', 'area_leader'))`),
+    // One area leader per area.
     uniqueIndex("one_leader_per_area")
       .on(t.areaId)
-      .where(sql`${t.role} <> 'member' and ${t.active}`),
+      .where(sql`${t.role} = 'area_leader' and ${t.active}`),
   ],
 );
 
@@ -163,10 +165,11 @@ export const sessions = pgTable(
   "sessions",
   {
     id: id(),
-    areaId: integer("area_id")
+    // The creator's area; null when the region leader created it: such a session belongs to every area of the region.
+    areaId: integer("area_id").references(() => areas.id),
+    regionId: integer("region_id")
       .notNull()
-      .references(() => areas.id),
-    regionId: integer("region_id").notNull(),
+      .references(() => regions.id),
     createdBy: integer("created_by")
       .notNull()
       .references(() => users.id),

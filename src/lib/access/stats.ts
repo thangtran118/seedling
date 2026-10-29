@@ -3,7 +3,7 @@ import { and, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { listenerLinks, listenerPrivate, listeners, sessionMembers, sessions, users } from "@/db/schema";
 import { addDays, dayKey, dayStart, sundayWeekStart, WEEKLY_SESSION_GOAL } from "@/lib/domain";
-import { loadAreaInRegion } from "./areas";
+import { pickedOrOwnArea } from "./areas";
 import type { SessionUser } from "./auth";
 import { forbiddenError, notFoundError } from "./errors";
 import { listListenersLinkedTo, type ListenerSummary } from "./listeners";
@@ -159,9 +159,9 @@ export async function memberStats(viewer: SessionUser, memberId: number, now = n
 export async function memberMonthTable(
   viewer: SessionUser,
   now = new Date(),
-  areaId = viewer.areaId,
+  pick?: number,
 ): Promise<MemberMonthRow[]> {
-  await requireAreaVisible(viewer, areaId);
+  const areaId = await requireAreaVisible(viewer, pick);
   const from = monthFrom(now);
   const memberRows = await db
     .select({ id: users.id, name: users.name, role: users.role })
@@ -203,11 +203,13 @@ export async function memberMonthTable(
     );
 }
 
-// Members see their own area's numbers; the region leader any area of the region.
-async function requireAreaVisible(viewer: SessionUser, areaId: number) {
-  await loadAreaInRegion(viewer, areaId);
-  if (areaId !== viewer.areaId && !isRegionLeader(viewer))
+// Members see their own area's numbers; the region leader any area of the region (and must pick one). Returns the
+// area id.
+async function requireAreaVisible(viewer: SessionUser, pick: number | undefined) {
+  const area = await pickedOrOwnArea(viewer, pick);
+  if (area.id !== viewer.areaId && !isRegionLeader(viewer))
     throw forbiddenError("Chỉ địa vực trưởng xem được thống kê của khu vực khác.");
+  return area.id;
 }
 
 async function overviewOf(sc: Scope, now: Date): Promise<AreaStats> {
@@ -235,8 +237,8 @@ async function overviewOf(sc: Scope, now: Date): Promise<AreaStats> {
 
 // One area: this week's sessions (counted in the area of whoever created them, so no session counts twice in the
 // region) and its listeners.
-export async function areaStats(viewer: SessionUser, now = new Date(), areaId = viewer.areaId): Promise<AreaStats> {
-  await requireAreaVisible(viewer, areaId);
+export async function areaStats(viewer: SessionUser, now = new Date(), pick?: number): Promise<AreaStats> {
+  const areaId = await requireAreaVisible(viewer, pick);
   return overviewOf({ areaId }, now);
 }
 

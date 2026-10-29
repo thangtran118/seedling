@@ -44,6 +44,7 @@ const listenerSchema = z.object({
     telegram: optionalText,
   }),
   note: optionalText, // the first note, on create only
+  areaId: z.number().int().positive().max(2_147_483_647).optional(), // create, region leader only: the listener's area
   confirmNew: z.boolean().optional(),
 });
 

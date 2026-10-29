@@ -37,10 +37,13 @@ export type SessionListItem = {
   state: SessionState;
   locationLabel: string | null;
   mapUrl: string | null; // Google Maps link to the meeting place, region-visible like the place name
-  otherArea: string | null; // the session's area (its creator's) when it is not the viewer's own, for a tag
+  // A tag: the session's area (its creator's) when it is not the viewer's own; "Địa vực" for one the region leader
+  // created.
+  otherArea: string | null;
   // Every area the session belongs to: its creator's, and those of its listeners and people. A cross-area session
-  // shows under each of them.
+  // shows under each of them; one the region leader created (allAreas) under every area.
   areaIds: number[];
+  allAreas: boolean;
   // nextLesson: the lesson to share next on the listener's route, on upcoming / in-progress sessions only (undefined
   // otherwise; null when the route is done).
   // owners: the listener's người đồng hành, so the session list shows whose chiên it is.
@@ -419,7 +422,7 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
     db
       .select({ id: areas.id, name: areas.name })
       .from(areas)
-      .where(inArray(areas.id, [...new Set(rows.map((r) => r.areaId))])),
+      .where(inArray(areas.id, [...new Set(rows.flatMap((r) => (r.areaId === null ? [] : [r.areaId])))])),
   ]);
   const ownersOf = (listenerId: number) => [
     ...new Set(owners.filter((o) => o.listenerId === listenerId).map((o) => o.name)),
@@ -443,14 +446,22 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
       state: r.state,
       locationLabel: r.locationLabel,
       mapUrl: r.mapUrl,
-      otherArea: r.areaId === viewer.areaId ? null : (areaRows.find((a) => a.id === r.areaId)?.name ?? ""),
+      otherArea:
+        r.areaId === null
+          ? "Địa vực"
+          : r.areaId === viewer.areaId
+            ? null
+            : (areaRows.find((a) => a.id === r.areaId)?.name ?? ""),
       areaIds: [
-        ...new Set([
-          r.areaId,
-          ...ls.filter((l) => l.sessionId === r.id).map((l) => l.areaId),
-          ...mine.map((m) => m.areaId),
-        ]),
+        ...new Set(
+          [
+            r.areaId,
+            ...ls.filter((l) => l.sessionId === r.id).map((l) => l.areaId),
+            ...mine.map((m) => m.areaId),
+          ].filter((a): a is number => a !== null),
+        ),
       ],
+      allAreas: r.areaId === null,
       listeners: ls
         .filter((l) => l.sessionId === r.id)
         .map(({ id, name }) =>

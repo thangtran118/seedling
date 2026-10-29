@@ -26,19 +26,23 @@ type Values = {
   zalo: string;
   telegram: string;
   notes: string;
+  areaId?: string; // create, region leader only
 };
 
 const input = `${INPUT} h-12`;
 
 // Controlled inputs + direct action call (not <form action>): a "possible duplicate" answer must not wipe the form.
+// areas: given to the region leader, who belongs to no area, so a new listener needs one picked.
 export function ListenerForm({
   mode,
   initial,
   submit,
+  areas,
 }: {
   mode: "create" | "edit";
   initial: Values;
   submit: (input: ListenerFormInput) => Promise<ListenerFormResult>;
+  areas?: { id: number; name: string }[];
 }) {
   const [v, setV] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +68,7 @@ export function ListenerForm({
           telegram: v.telegram,
         },
         note: mode === "create" ? v.notes : undefined,
+        areaId: mode === "create" && areas && v.areaId ? Number(v.areaId) : undefined,
         confirmNew,
       });
       if ("similar" in result) setSimilar(result.similar);
@@ -96,6 +101,26 @@ export function ListenerForm({
           className={input}
         />
       </label>
+      {mode === "create" && areas && (
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold text-ink">
+            Khu vực{" "}
+            <span className="text-danger" aria-label="bắt buộc">
+              *
+            </span>
+          </span>
+          <select value={v.areaId ?? ""} onChange={set("areaId")} required className={input}>
+            <option value="" disabled>
+              Chọn khu vực của chiên
+            </option>
+            {areas.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-semibold text-ink">Năm sinh</span>
