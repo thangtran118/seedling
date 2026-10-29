@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/access/current-user";
 import { Loading, PageHeader, Section } from "@/app/ui/kit";
-import { ConfirmLogout } from "@/app/ui/confirm-logout";
+import { LogoutButton } from "@/app/ui/logout-button";
 import { ThemeSwitcher } from "@/app/ui/theme";
 
 export const metadata: Metadata = { title: "Tài khoản · Seedling" };
@@ -65,7 +65,7 @@ async function Account() {
       )}
 
       <div className="mt-4">
-        <ConfirmLogout />
+        <LogoutButton className="flex h-12 w-full items-center justify-center rounded-xl border border-danger/40 bg-surface text-base font-semibold text-danger hover:bg-danger/10 disabled:opacity-60" />
       </div>
     </>
   );
