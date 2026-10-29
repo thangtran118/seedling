@@ -3,6 +3,7 @@ import { and, asc, desc, eq, ilike, inArray, max, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   listenerLinks,
+  listenerNotes,
   listenerPrivate,
   listeners,
   piiAccessLog,
@@ -23,6 +24,7 @@ import {
 import type { SessionUser } from "./auth";
 import { completedAt } from "./phase";
 import { forbiddenError, invalidError, notFoundError } from "./errors";
+import { cleanNoteBody, notesFor, type ListenerNote } from "./notes";
 
 // ---------- DTOs: the only listener shapes that leave the access layer ----------
 
@@ -44,7 +46,6 @@ export type ListenerPrivateFields = {
   facebook: string | null;
   zalo: string | null;
   telegram: string | null;
-  notes: string | null;
 };
 
 export type ListenerHistoryItem = {
@@ -61,6 +62,7 @@ export type ListenerDetail = ListenerSummary & {
   canEdit: boolean;
   canManageLinks: boolean;
   private: ListenerPrivateFields | null; // null when the viewer may not see it
+  notes: ListenerNote[] | null; // newest first; null with history (see historyVisibleListenerIds)
   history: ListenerHistoryItem[] | null; // null when the viewer may not see it, see historyVisibleListenerIds
 };
 
@@ -77,7 +79,7 @@ export async function isLinked(userId: string, listenerId: string) {
   return Boolean(row);
 }
 
-// Listening history (which day each session was, who went) is visible to the listener's linked
+// Listening history (which day each session was, who went) and the notes are visible to the listener's linked
 // users, to anyone who went or is going on a session with them (cancelled ones do not count), and to the area
 // leader. Returns the subset of listenerIds (all in the viewer's area) whose history this viewer may see.
 export async function historyVisibleListenerIds(viewer: SessionUser, listenerIds: string[]): Promise<Set<string>> {
@@ -223,11 +225,16 @@ export async function listListenersLinkedTo(viewer: SessionUser, userId: string)
   return summarize(viewer, rows);
 }
 
-export type SessionListener = ListenerSummary & { private: ListenerPrivateFields | null };
+export type SessionListener = ListenerSummary & {
+  private: ListenerPrivateFields | null;
+  notes: ListenerNote[] | null; // newest first; null with history (see historyVisibleListenerIds)
+  history: ListenerHistoryItem[] | null;
+};
 
 // Listeners as shown on a session page, in the given order. Callers pass the listeners of a session the viewer
 // may open (getSessionDetail checks that). Contact fields follow the listener rule: linked users and the area
-// leader only, and each read is logged exactly like the listener page.
+// leader only; history and notes follow the history rule (people on a session with the listener too). Each read is logged
+// exactly like the listener page.
 export async function listenersForSession(viewer: SessionUser, listenerIds: string[]): Promise<SessionListener[]> {
   if (listenerIds.length === 0) return [];
   const rows = await db
@@ -244,6 +251,16 @@ export async function listenersForSession(viewer: SessionUser, listenerIds: stri
       .insert(piiAccessLog)
       .values(allowed.map((listenerId) => ({ viewerId: viewer.id, listenerId, reason: "view_listener_private" })));
   }
+  const withNotes = [...(await historyVisibleListenerIds(viewer, listenerIds))];
+  if (withNotes.length) {
+    await db
+      .insert(piiAccessLog)
+      .values(withNotes.map((listenerId) => ({ viewerId: viewer.id, listenerId, reason: "view_listener_history" })));
+  }
+  const [notes, histories] = await Promise.all([
+    notesFor(viewer, withNotes),
+    Promise.all(withNotes.map(async (id) => [id, await listenerHistory(id)] as const)).then((e) => new Map(e)),
+  ]);
   const byId = new Map(summaries.map((l) => [l.id, l]));
   return listenerIds.flatMap((id) => {
     const l = byId.get(id);
@@ -259,9 +276,10 @@ export async function listenersForSession(viewer: SessionUser, listenerIds: stri
               facebook: p?.facebook ?? null,
               zalo: p?.zalo ?? null,
               telegram: p?.telegram ?? null,
-              notes: p?.notes ?? null,
             }
           : null,
+        notes: withNotes.includes(id) ? (notes.get(id) ?? []) : null,
+        history: histories.get(id) ?? null,
       },
     ];
   });
@@ -290,12 +308,12 @@ export async function getListenerDetail(viewer: SessionUser, listenerId: string)
       facebook: p?.facebook ?? null,
       zalo: p?.zalo ?? null,
       telegram: p?.telegram ?? null,
-      notes: p?.notes ?? null,
     };
     await logAccess({ viewerId: viewer.id, listenerId, reason: "view_listener_private" });
   }
 
   const canViewHistory = (await historyVisibleListenerIds(viewer, [listenerId])).has(listenerId);
+  // People on a session with this listener read its history and notes (not the contact fields).
   if (canViewHistory) await logAccess({ viewerId: viewer.id, listenerId, reason: "view_listener_history" });
 
   return {
@@ -305,6 +323,7 @@ export async function getListenerDetail(viewer: SessionUser, listenerId: string)
     canEdit: summary.linked,
     canManageLinks: summary.linked || viewer.role === "area_leader",
     private: privateFields,
+    notes: canViewHistory ? ((await notesFor(viewer, [listenerId])).get(listenerId) ?? []) : null,
     history: canViewHistory ? await listenerHistory(listenerId) : null,
   };
 }
@@ -381,7 +400,6 @@ function validateListenerInput(input: ListenerInput) {
       facebook: clean(input.private.facebook, 200),
       zalo: clean(input.private.zalo, 200),
       telegram: clean(input.private.telegram, 200),
-      notes: clean(input.private.notes, 2000),
     },
   };
 }
@@ -390,9 +408,11 @@ const hasAny = (p: ListenerPrivateFields) => Object.values(p).some((v) => v !== 
 
 export async function createListener(
   viewer: SessionUser,
-  input: ListenerInput & { progress?: Progress },
+  input: ListenerInput & { progress?: Progress; note?: string | null },
 ): Promise<string> {
   const clean = validateListenerInput(input);
+  // The first note can be written with the new listener; later ones are added on the listener page.
+  const note = input.note?.trim() ? cleanNoteBody(input.note) : null;
   // A listener may be added part-way: at mảnh N, or already báptem / từ chối.
   const { manualStatus, lessons } = input.progress ?? { manualStatus: "moi_quen", lessons: 0 };
   if (!Number.isInteger(lessons) || lessons < 0 || lessons > LESSONS.length) throw invalidError("Mảnh không hợp lệ.");
@@ -413,6 +433,7 @@ export async function createListener(
       .returning({ id: listeners.id });
     await tx.insert(listenerLinks).values({ listenerId: row.id, userId: viewer.id, addedBy: viewer.id });
     if (hasAny(clean.private)) await tx.insert(listenerPrivate).values({ listenerId: row.id, ...clean.private });
+    if (note) await tx.insert(listenerNotes).values({ listenerId: row.id, authorId: viewer.id, body: note });
     return row.id;
   });
 }

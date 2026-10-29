@@ -77,68 +77,70 @@ export function ListenerEditor({
   );
 }
 
-export function ListenerMainCard({
-  name,
-  age,
-  notes,
-  canEdit,
-}: {
-  name: string;
-  age: number | null;
-  notes: string | null;
-  canEdit: boolean;
-}) {
+// Who, then the mảnh: "Đang nghe mảnh N" and the next one to share over the seven mảnh, the current one ringed.
+// People in charge edit it by tapping a mảnh or with the status select below, saved with the page's "Lưu" bar.
+export function ListenerMainCard({ name, age, canEdit }: { name: string; age: number | null; canEdit: boolean }) {
   const { progress, setProgress } = useEditor();
   const stage = stageOf(progress);
   const closed = progress.manualStatus === "baptem" || progress.manualStatus === "tu_choi";
   const heard = LESSONS.filter((n) => n <= progress.lessons);
   const next = nextLesson(heard);
+  const listening = !closed && progress.lessons > 0;
 
   return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="break-words text-2xl font-bold leading-tight text-ink">{name}</h2>
-          <p className="mt-0.5 text-sm text-muted">{age === null ? "Chưa rõ tuổi" : `${age} tuổi`}</p>
-        </div>
-        <StageBadge stage={stage} size="md" />
+    <section className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
+      <div className="min-w-0">
+        <h2 className="break-words text-2xl font-bold leading-tight text-ink">{name}</h2>
+        <p className="mt-0.5 text-sm text-muted">{age === null ? "Chưa rõ tuổi" : `${age} tuổi`}</p>
       </div>
 
-      {notes && <p className="whitespace-pre-wrap rounded-xl bg-sunken px-3 py-2 text-sm text-ink">{notes}</p>}
-
-      <div className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted">Mảnh</span>
-          <span className="text-sm text-muted">
-            {progress.lessons === 0 ? (
-              "Chưa nghe mảnh nào"
+      <div className={`flex flex-col gap-2.5 rounded-xl p-3 ${listening ? "bg-accent/10" : "bg-sunken"}`}>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm text-muted">
+          {listening ? (
+            <p>
+              Đang nghe{" "}
+              <b className="text-base font-semibold text-accent">
+                mảnh <span className="tabular-nums">{progress.lessons}</span>
+              </b>
+              <span className="tabular-nums">/{LESSONS.length}</span>
+            </p>
+          ) : (
+            <p className="flex items-center gap-2">
+              <StageBadge stage={stage} />
+              {closed && (
+                <span className="tabular-nums">
+                  đã nghe {progress.lessons}/{LESSONS.length} mảnh
+                </span>
+              )}
+            </p>
+          )}
+          {!closed &&
+            (next === null ? (
+              <p className="font-semibold text-done">Đã nghe đủ 7 mảnh</p>
             ) : (
-              <>
-                {progress.lessons}/{LESSONS.length}
-                {!closed &&
-                  (next === null ? (
-                    " · đã nghe đủ"
-                  ) : (
-                    <>
-                      {" "}
-                      · kế tiếp <b className="text-ink">mảnh {next}</b>
-                    </>
-                  ))}
-              </>
-            )}
-          </span>
+              <p>
+                Kế tiếp <b className="font-semibold text-ink tabular-nums">mảnh {next}</b>
+              </p>
+            ))}
         </div>
+
         <div className="grid grid-cols-7 gap-1.5">
           {LESSONS.map((n) => {
             const on = n <= progress.lessons;
-            const cls = `flex h-12 items-center justify-center rounded-lg text-base font-bold tabular-nums ${
-              on ? (closed ? "bg-line text-ink" : "bg-accent text-on-accent") : "border border-line text-muted"
-            }`;
+            const current = listening && n === progress.lessons;
+            const cls = `flex h-11 items-center justify-center rounded-lg text-base font-bold tabular-nums transition-colors ${
+              on
+                ? closed
+                  ? "bg-line text-ink"
+                  : "bg-accent text-on-accent"
+                : "border border-line bg-surface text-muted"
+            } ${current ? "ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""}`;
             return canEdit ? (
               <button
                 key={n}
                 type="button"
                 aria-pressed={on}
+                aria-current={current ? "step" : undefined}
                 aria-label={`Mảnh ${n}`}
                 onClick={() => setProgress(tapLesson(progress, n))}
                 className={`${cls} active:scale-95`}
@@ -146,12 +148,13 @@ export function ListenerMainCard({
                 {n}
               </button>
             ) : (
-              <span key={n} className={cls}>
+              <span key={n} aria-current={current ? "step" : undefined} className={cls}>
                 {n}
               </span>
             );
           })}
         </div>
+        {canEdit && <p className="text-xs text-muted">Chạm vào mảnh vừa nghe xong để cập nhật.</p>}
       </div>
 
       {canEdit && (

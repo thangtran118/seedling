@@ -12,6 +12,7 @@ import {
   setProgress,
   updateListener,
 } from "@/lib/access/listeners";
+import { addNote, deleteNote, updateNote } from "@/lib/access/notes";
 import { guard, type ActionError } from "./guard";
 
 const optionalText = z
@@ -38,8 +39,8 @@ const listenerSchema = z.object({
     facebook: optionalText,
     zalo: optionalText,
     telegram: optionalText,
-    notes: optionalText,
   }),
+  note: optionalText, // the first note, on create only
   confirmNew: z.boolean().optional(),
 });
 
@@ -98,6 +99,38 @@ export async function saveListenerAction(listenerId: string, input: z.input<type
     if (progress) await setProgress(user, listenerId, progress);
     for (const userId of addUserIds) await addLink(user, listenerId, userId);
   });
+  if (result) return { error: result.error };
+  refresh();
+  return {};
+}
+
+const noteSchema = z.object({ body: z.string() });
+
+// Notes save on their own, outside the page's "Lưu thay đổi" bar.
+export async function addNoteAction(listenerId: string, input: z.input<typeof noteSchema>): Promise<SimpleState> {
+  const user = await requireUser();
+  const parsed = noteSchema.safeParse(input);
+  if (!parsed.success || !z.string().uuid().safeParse(listenerId).success) return { error: "Dữ liệu không hợp lệ." };
+  const result = await guard(() => addNote(user, listenerId, parsed.data));
+  if (result) return { error: result.error };
+  refresh();
+  return {};
+}
+
+export async function updateNoteAction(noteId: string, body: string): Promise<SimpleState> {
+  const user = await requireUser();
+  if (!z.string().uuid().safeParse(noteId).success || typeof body !== "string")
+    return { error: "Dữ liệu không hợp lệ." };
+  const result = await guard(() => updateNote(user, noteId, body));
+  if (result) return { error: result.error };
+  refresh();
+  return {};
+}
+
+export async function deleteNoteAction(noteId: string): Promise<SimpleState> {
+  const user = await requireUser();
+  if (!z.string().uuid().safeParse(noteId).success) return { error: "Dữ liệu không hợp lệ." };
+  const result = await guard(() => deleteNote(user, noteId));
   if (result) return { error: result.error };
   refresh();
   return {};

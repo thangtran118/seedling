@@ -4,6 +4,7 @@
 import {
   boolean,
   check,
+  index,
   integer,
   pgEnum,
   pgSchema,
@@ -176,8 +177,25 @@ export const listenerPrivate = privateSchema.table("listener_private", {
   facebook: varchar("facebook", { length: 200 }),
   zalo: varchar("zalo", { length: 200 }),
   telegram: varchar("telegram", { length: 200 }),
-  notes: text("notes"),
 });
+
+// Notes about a listener, many per listener, written whenever (often after a buổi trudo). Not tied to a session.
+export const listenerNotes = privateSchema.table(
+  "listener_notes",
+  {
+    id: id(),
+    listenerId: uuid("listener_id")
+      .notNull()
+      .references(() => listeners.id),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }),
+  },
+  (t) => [index("listener_notes_listener_idx").on(t.listenerId, t.createdAt)],
+);
 
 export const sessionPrivate = privateSchema.table("session_private", {
   sessionId: uuid("session_id")

@@ -49,8 +49,8 @@ export function ListenerForm({
           facebook: v.facebook,
           zalo: v.zalo,
           telegram: v.telegram,
-          notes: v.notes,
         },
+        note: mode === "create" ? v.notes : undefined,
         confirmNew,
       });
       if ("similar" in result) setSimilar(result.similar);
@@ -134,10 +134,13 @@ export function ListenerForm({
             />
           </label>
         ))}
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm text-ink">Ghi chú (sở thích, thói quen…)</span>
-          <textarea value={v.notes} onChange={set("notes")} rows={3} maxLength={2000} className={`${INPUT} py-2`} />
-        </label>
+        {/* Later notes (after each buổi trudo) are added on the listener page, one by one. */}
+        {mode === "create" && (
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm text-ink">Ghi chú (sở thích, thói quen…)</span>
+            <textarea value={v.notes} onChange={set("notes")} rows={3} maxLength={2000} className={`${INPUT} py-2`} />
+          </label>
+        )}
       </fieldset>
 
       {similar && (

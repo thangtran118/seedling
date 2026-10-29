@@ -5,6 +5,28 @@ import { KindIcon, PHASE_TONE, PhaseBadge } from "./kit";
 
 const names = (xs: { name: string }[]) => xs.map((x) => x.name).join(", ");
 
+// Whose chiên: "Chiên ae An np"; with several listeners, per listener: "Lan: ae An · Hùng: ae Bình, ae Chi".
+function Owners({ listeners }: { listeners: SessionListItem["listeners"] }) {
+  const withOwners = listeners.filter((l) => l.owners.length);
+  if (withOwners.length === 0) return null;
+  return (
+    <p className="mt-0.5 truncate text-sm text-muted">
+      {listeners.length === 1 ? (
+        <>
+          Chiên <span className="font-medium text-ink">{withOwners[0].owners.join(", ")}</span> np
+        </>
+      ) : (
+        withOwners.map((l, i) => (
+          <span key={l.id}>
+            {i > 0 && " · "}
+            {l.name}: <span className="font-medium text-ink">{l.owners.join(", ")}</span>
+          </span>
+        ))
+      )}
+    </p>
+  );
+}
+
 // Listener names, each followed by the mảnh to share next when the viewer may see it: "Lan M4, Hùng M2".
 function ListenerNames({ listeners }: { listeners: SessionListItem["listeners"] }) {
   return (
@@ -87,6 +109,7 @@ export function SessionCard({
             <PhaseBadge phase={phase} />
           )}
         </div>
+        {s.kind === "visit" && <Owners listeners={s.listeners} />}
         <p className="mt-0.5 truncate text-sm text-muted">
           {s.locationLabel ?? "Chưa ghi nơi gặp"}
           {!compact && <> · {names(s.members)}</>}

@@ -261,7 +261,9 @@ export function SessionForm(props: SessionFormProps) {
             className={`${INPUT} h-12`}
           />
         </label>
+        {/* Visit sessions: notes go on each chiên (listener page or the session page), not on the session. */}
         {mode !== "plan" &&
+          outreach &&
           (!showSummary ? (
             <button
               type="button"

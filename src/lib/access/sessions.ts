@@ -29,7 +29,8 @@ export type SessionListItem = {
   mapUrl: string | null; // Google Maps link to the meeting place, area-visible like the place name
   // nextLesson: the mảnh to share next, on upcoming / in-progress sessions only and only where the viewer may see
   // the listener's history (undefined otherwise; null when all seven are heard).
-  listeners: { id: string; name: string; nextLesson?: number | null }[];
+  // owners: the listener's người đồng hành, so the session list shows whose chiên it is.
+  listeners: { id: string; name: string; owners: string[]; nextLesson?: number | null }[];
   members: { id: string; name: string }[];
   isMember: boolean;
   canJoin: boolean; // upcoming or in progress, and the viewer is not in it yet (no member cap)
@@ -102,7 +103,7 @@ function validateDetails(input: DetailsInput) {
     startsAt: input.startsAt,
     locationLabel: cleanText(input.locationLabel, 80, "Nơi gặp"),
     mapUrl: cleanMapUrl(input.mapUrl),
-    summary: cleanText(input.summary, 2000, "Tóm tắt"),
+    summary: cleanText(input.summary, 2000, "Ghi chú"),
   };
 }
 
@@ -307,7 +308,8 @@ export async function updateSession(
       .set({ startsAt: details.startsAt, locationLabel: details.locationLabel, mapUrl: details.mapUrl })
       .where(eq(sessions.id, sessionId));
     await writeComposition(tx, sessionId, c);
-    await writePrivate(tx, sessionId, { summary: details.summary });
+    // Only outreach keeps a note on the session; notes about a listener live on the listener (listener_notes).
+    await writePrivate(tx, sessionId, { summary: row.kind === "outreach" ? details.summary : null });
   });
 }
 
@@ -329,7 +331,7 @@ export async function cancelSession(viewer: SessionUser, sessionId: string) {
 async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)[]): Promise<SessionListItem[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [ls, ms] = await Promise.all([
+  const [ls, ms, owners] = await Promise.all([
     db
       .select({ sessionId: sessionListeners.sessionId, id: listeners.id, name: listeners.name })
       .from(sessionListeners)
@@ -340,7 +342,17 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
       .from(sessionMembers)
       .innerJoin(users, eq(users.id, sessionMembers.userId))
       .where(inArray(sessionMembers.sessionId, ids)),
+    db
+      .select({ listenerId: listenerLinks.listenerId, name: users.name })
+      .from(listenerLinks)
+      .innerJoin(users, eq(users.id, listenerLinks.userId))
+      .innerJoin(sessionListeners, eq(sessionListeners.listenerId, listenerLinks.listenerId))
+      .where(inArray(sessionListeners.sessionId, ids))
+      .orderBy(asc(listenerLinks.createdAt)),
   ]);
+  const ownersOf = (listenerId: string) => [
+    ...new Set(owners.filter((o) => o.listenerId === listenerId).map((o) => o.name)),
+  ];
   const openIds = new Set(rows.filter(isOpen).map((r) => r.id));
   const progressIds = [...new Set(ls.filter((l) => openIds.has(l.sessionId)).map((l) => l.id))];
   const visible = await historyVisibleListenerIds(viewer, progressIds);
@@ -359,8 +371,8 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
         .filter((l) => l.sessionId === r.id)
         .map(({ id, name }) =>
           openIds.has(r.id) && visible.has(id)
-            ? { id, name, nextLesson: nextLesson(heard.get(id) ?? []) }
-            : { id, name },
+            ? { id, name, owners: ownersOf(id), nextLesson: nextLesson(heard.get(id) ?? []) }
+            : { id, name, owners: ownersOf(id) },
         ),
       members,
       isMember,

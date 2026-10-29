@@ -21,6 +21,8 @@ import {
   StageBadge,
 } from "@/app/ui/kit";
 import { ProgressNote } from "@/app/ui/listener-card";
+import { ListenerHistory } from "@/app/ui/listener-history";
+import { NoteComposer } from "@/app/ui/listener-notes";
 import { firstParam, loadOr404 } from "@/app/ui/load";
 
 export const metadata: Metadata = { title: "Ca trudo · Seedling" };
@@ -133,7 +135,7 @@ async function Detail({
       </Section>
 
       {s.private?.summary && (
-        <Section title="Tóm tắt ca">
+        <Section title="Ghi chú">
           <Card>
             <p className="whitespace-pre-wrap text-sm text-ink">{s.private.summary}</p>
           </Card>
@@ -173,6 +175,20 @@ async function Detail({
             </ActionForm>
           )}
         </div>
+      )}
+
+      {/* Everyone on the session reads each listener's whole history and notes, at the very end. */}
+      {people.map(
+        (l) =>
+          l.history && (
+            <ListenerHistory
+              key={l.id}
+              title={people.length > 1 ? `Lịch sử · ${l.name}` : "Lịch sử"}
+              history={l.history}
+              notes={l.notes}
+              currentSessionId={s.id}
+            />
+          ),
       )}
     </>
   );
@@ -223,9 +239,12 @@ function ListenerPanel({ l }: { l: SessionListener }) {
       {l.private && (
         <div className="flex flex-col gap-2 border-t border-line pt-3">
           <ContactList p={l.private} />
-          {l.private.notes && (
-            <p className="whitespace-pre-wrap rounded-xl bg-sunken px-3 py-2 text-sm text-ink">{l.private.notes}</p>
-          )}
+        </div>
+      )}
+
+      {l.linked && (
+        <div className="flex flex-col border-t border-line pt-3">
+          <NoteComposer listenerId={l.id} />
         </div>
       )}
     </article>

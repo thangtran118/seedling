@@ -15,7 +15,7 @@ async function wipe() {
   if (!["localhost", "127.0.0.1", "::1", "[::1]"].includes(host)) {
     throw new Error(`refusing to wipe a non-local database (${host})`);
   }
-  await sqlClient`truncate private.session_private, private.listener_private, pii_access_log,
+  await sqlClient`truncate private.listener_notes, private.session_private, private.listener_private, pii_access_log,
     session_listeners, session_members, sessions, listener_links, listeners,
     login_attempts, auth_sessions, users, areas cascade`;
 }
@@ -120,7 +120,12 @@ async function main() {
       listenerId: row.id,
       phone: l.phone,
       hometown: "Quê giả",
-      notes: "Ghi chú giả: thích uống trà",
+    });
+    await db.insert(s.listenerNotes).values({
+      listenerId: row.id,
+      authorId: l.owner.id,
+      body: "Ghi chú giả: thích uống trà",
+      createdAt: daysAgo(l.added),
     });
     listeners.push(row);
   }
@@ -148,9 +153,12 @@ async function main() {
       .returning();
     await db.insert(s.sessionMembers).values(h.members.map((m) => ({ sessionId: session.id, userId: m.id })));
     await db.insert(s.sessionListeners).values({ sessionId: session.id, listenerId: listeners[h.listener].id });
-    await db.insert(s.sessionPrivate).values({
-      sessionId: session.id,
-      summary: "Tóm tắt giả",
+    await db.insert(s.sessionPrivate).values({ sessionId: session.id, summary: null });
+    await db.insert(s.listenerNotes).values({
+      listenerId: listeners[h.listener].id,
+      authorId: h.members[0].id,
+      body: "Ghi chú giả sau buổi: chiên hỏi thêm về mảnh vừa nghe, hẹn gặp lại cuối tuần.",
+      createdAt: daysAgo(h.ago),
     });
   }
 

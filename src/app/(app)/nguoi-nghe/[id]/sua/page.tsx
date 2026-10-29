@@ -39,7 +39,7 @@ async function Edit({ params }: { params: PageProps<"/nguoi-nghe/[id]/sua">["par
           facebook: p.facebook ?? "",
           zalo: p.zalo ?? "",
           telegram: p.telegram ?? "",
-          notes: p.notes ?? "",
+          notes: "",
         }}
       />
     </>
