@@ -233,12 +233,26 @@ export function StatTile({
 
 // ---------- phone actions ----------
 
-// The one action that must stay under the thumb on phones; hidden from md up, where it sits in the page.
-export function Fab({ href, children }: { href: string; children: ReactNode }) {
+// The actions that must stay under the thumb on phones, stacked bottom right; hidden from md up, where they sit in the page.
+export function FabStack({ children }: { children: ReactNode }) {
+  // The layout's bottom padding clears one button; the spacer clears the rest so the page's end can scroll past the stack.
+  return (
+    <>
+      <div aria-hidden className="h-16 md:hidden" />
+      <div className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 flex flex-col items-end gap-3 md:hidden">
+        {children}
+      </div>
+    </>
+  );
+}
+
+// Secondary: a light button under the main one, so the stack keeps one clear first action.
+export function Fab({ href, secondary, children }: { href: string; secondary?: boolean; children: ReactNode }) {
+  const tone = secondary ? "border border-line bg-surface text-accent" : "bg-accent text-on-accent";
   return (
     <Link
       href={href}
-      className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 flex h-14 items-center gap-2 rounded-full bg-accent pr-5 pl-4 text-base font-semibold text-on-accent shadow-lg shadow-black/20 active:scale-[0.98] md:hidden"
+      className={`flex h-14 items-center gap-2 rounded-full pr-5 pl-4 text-base font-semibold shadow-lg shadow-black/20 active:scale-[0.98] ${tone}`}
     >
       <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden>
         <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />

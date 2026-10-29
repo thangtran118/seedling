@@ -20,7 +20,7 @@ import {
 } from "@/lib/domain";
 import { AccountMenu } from "@/app/ui/account-menu";
 import { AutoRefresh } from "@/app/ui/auto-refresh";
-import { Empty, Fab, Loading, Section } from "@/app/ui/kit";
+import { Empty, Fab, FabStack, Loading, Section } from "@/app/ui/kit";
 import { ListenerRows } from "@/app/ui/listener-card";
 import { StatsTiles } from "@/app/ui/listener-stats";
 import { SessionCard } from "@/app/ui/session-card";
@@ -67,12 +67,17 @@ async function Home() {
         </div>
         <AccountMenu name={user.name} role={isLeader ? "Khu vực trưởng" : "Thánh đồ"} />
         {/* md+: the phone's floating button and account menu are hidden; same spot and style as on /lich. */}
-        <Link
-          href="/ca/hen"
-          className="hidden shrink-0 rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-on-accent md:block"
-        >
-          + Đặt lịch trudo
-        </Link>
+        <div className="hidden shrink-0 gap-2 md:flex">
+          <Link
+            href="/nguoi-nghe/moi"
+            className="rounded-xl border border-line bg-surface px-3 py-2 text-sm font-semibold text-accent"
+          >
+            + Thêm chiên
+          </Link>
+          <Link href="/ca/hen" className="rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-on-accent">
+            + Đặt lịch trudo
+          </Link>
+        </div>
       </header>
 
       <Section
@@ -138,9 +143,10 @@ async function Home() {
           <Section
             title={myListeners.length ? `Chiên của tôi (${myListeners.length})` : "Chiên của tôi"}
             aside={
-              <Link href="/nguoi-nghe" className="text-sm font-medium text-accent">
-                Xem tất cả →
-              </Link>
+              <span className="flex gap-4 text-sm font-medium text-accent">
+                <Link href="/nguoi-nghe/moi">Thêm chiên +</Link>
+                <Link href="/nguoi-nghe">Xem tất cả →</Link>
+              </span>
             }
           >
             {myListeners.length ? (
@@ -152,7 +158,12 @@ async function Home() {
         </div>
       </div>
 
-      <Fab href="/ca/hen">Đặt lịch trudo</Fab>
+      <FabStack>
+        <Fab href="/ca/hen">Đặt lịch trudo</Fab>
+        <Fab href="/nguoi-nghe/moi" secondary>
+          Thêm chiên
+        </Fab>
+      </FabStack>
     </>
   );
 }
