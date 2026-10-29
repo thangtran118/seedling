@@ -76,6 +76,13 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
         </div>
       </header>
 
+      <figure className="border-l-2 border-accent pl-3">
+        <blockquote className="text-sm italic text-ink">
+          Nầy, ta đến mau chóng, và đem phần thưởng theo với ta, để trả cho mỗi người tùy theo công-việc họ làm.
+        </blockquote>
+        <figcaption className="mt-1 text-xs text-muted">Khải huyền 22:12</figcaption>
+      </figure>
+
       <nav aria-label="Lọc ca" className="flex gap-2">
         <FilterChip href="/" on={!onlyMine} label="Cả khu vực" count={allCount} />
         <FilterChip href="/?cua-toi=1" on={onlyMine} label="Ca của tôi" count={mineCount} />
