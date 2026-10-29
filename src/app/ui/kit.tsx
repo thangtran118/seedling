@@ -4,7 +4,18 @@ import type { ReactNode } from "react";
 import { BackLink } from "./back-link";
 import { LESSONS, PHASE_LABEL, stageLabel, type SessionPhase, type Stage } from "@/lib/domain";
 
-export function PageHeader({ title, back, action }: { title: string; back?: string; action?: ReactNode }) {
+// actionDesktopOnly: phones get the same action as a floating button under the thumb (FabStack) instead.
+export function PageHeader({
+  title,
+  back,
+  action,
+  actionDesktopOnly = false,
+}: {
+  title: string;
+  back?: string;
+  action?: ReactNode;
+  actionDesktopOnly?: boolean;
+}) {
   return (
     <header className="flex items-center gap-3 pb-2">
       {back && (
@@ -24,7 +35,7 @@ export function PageHeader({ title, back, action }: { title: string; back?: stri
         </BackLink>
       )}
       <h1 className="flex-1 truncate text-2xl font-bold tracking-tight text-ink">{title}</h1>
-      {action}
+      {action && actionDesktopOnly ? <div className="hidden md:block">{action}</div> : action}
     </header>
   );
 }

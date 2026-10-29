@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { requireUser } from "@/lib/access/current-user";
 import { listListeners, type ListenerSummary } from "@/lib/access/listeners";
 import { isClosedStage } from "@/lib/domain";
-import { Empty, HeaderAction, Loading, PageHeader, TextLink } from "@/app/ui/kit";
+import { Empty, Fab, FabStack, HeaderAction, Loading, PageHeader, TextLink } from "@/app/ui/kit";
 import { ListenerCard } from "@/app/ui/listener-card";
 import { firstParam } from "@/app/ui/load";
 import { SearchBox } from "@/app/ui/search-box";
@@ -14,7 +14,11 @@ export const metadata: Metadata = { title: "Chiên · Seedling" };
 export default function ListenersPage(props: PageProps<"/nguoi-nghe">) {
   return (
     <>
-      <PageHeader title="Chiên" action={<HeaderAction href="/nguoi-nghe/moi">+ Thêm chiên</HeaderAction>} />
+      <PageHeader
+        title="Chiên"
+        actionDesktopOnly
+        action={<HeaderAction href="/nguoi-nghe/moi">+ Thêm chiên</HeaderAction>}
+      />
       <Suspense fallback={<Loading />}>
         <List searchParams={props.searchParams} />
       </Suspense>
@@ -88,7 +92,15 @@ async function List({ searchParams }: { searchParams: PageProps<"/nguoi-nghe">["
       </div>
       {list.length === 0 &&
         (q || filter.key ? (
-          <Empty>Không tìm thấy chiên nào.</Empty>
+          <Empty
+            action={
+              q ? (
+                <TextLink href={`/nguoi-nghe/moi?ten=${encodeURIComponent(q)}`}>+ Thêm “{q}” làm chiên mới</TextLink>
+              ) : undefined
+            }
+          >
+            Không tìm thấy chiên nào.
+          </Empty>
         ) : (
           <Empty action={<TextLink href="/nguoi-nghe/moi">+ Thêm chiên đầu tiên</TextLink>}>
             {user.role === "area_leader" ? "Khu vực chưa có chiên nào." : "Bạn chưa đồng hành với chiên nào."}
@@ -96,6 +108,9 @@ async function List({ searchParams }: { searchParams: PageProps<"/nguoi-nghe">["
         ))}
       {mine.length > 0 && <Group title={`Bạn đồng hành (${mine.length})`} items={mine} />}
       {rest.length > 0 && <Group title={`Người khác đồng hành (${rest.length})`} items={rest} />}
+      <FabStack>
+        <Fab href={q ? `/nguoi-nghe/moi?ten=${encodeURIComponent(q)}` : "/nguoi-nghe/moi"}>Thêm chiên</Fab>
+      </FabStack>
     </>
   );
 }
