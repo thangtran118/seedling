@@ -49,7 +49,8 @@ const OPTIONS: { value: ThemePref; label: string; icon: string }[] = [
 ];
 
 // Segmented control: auto (follows the phone) / light / dark. Server render assumes "system"; the real choice
-// shows after hydration. `labeled`: full width with the words under each icon, for the account page.
+// shows after hydration. The chosen option is ringed in the accent: surface and sunken are near-identical in dark mode.
+// `labeled`: full width with the words under each icon, for the account page.
 export function ThemeSwitcher({ className = "", labeled = false }: { className?: string; labeled?: boolean }) {
   const pref = useSyncExternalStore(subscribe, readPref, () => "system" as ThemePref);
   return (
@@ -71,7 +72,7 @@ export function ThemeSwitcher({ className = "", labeled = false }: { className?:
             onClick={() => setPref(o.value)}
             className={`inline-flex items-center justify-center transition-colors ${
               labeled ? "h-14 flex-col gap-1 rounded-[10px] text-xs font-medium" : "h-8 w-9 rounded-full"
-            } ${on ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"}`}
+            } ${on ? "bg-surface text-accent shadow-sm ring-1 ring-accent/50" : "text-muted hover:text-ink"}`}
           >
             <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden>
               <path d={o.icon} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
