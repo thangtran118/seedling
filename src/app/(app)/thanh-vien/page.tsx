@@ -5,7 +5,7 @@ import { listRegionAreas } from "@/lib/access/areas";
 import { requireUser } from "@/lib/access/current-user";
 import { listMembersForAdmin } from "@/lib/access/members";
 import { isLeader, isRegionLeader } from "@/lib/access/scope";
-import { AreaChips } from "@/app/ui/area-scope";
+import { AreaPicker } from "@/app/ui/area-scope";
 import { Loading, PageHeader, Section } from "@/app/ui/kit";
 import { firstParam } from "@/app/ui/load";
 import { CreateMemberForm, MemberRow } from "@/app/ui/members-admin";
@@ -39,7 +39,7 @@ async function Members({ searchParams }: { searchParams: PageProps<"/thanh-vien"
   const areaName = areas.find((a) => a.id === areaId)?.name ?? "Khu vực";
   return (
     <>
-      {regionLeader && <AreaChips areas={areas} current={areaId} href={(id) => `/thanh-vien?kv=${id}`} />}
+      {regionLeader && <AreaPicker areas={areas} current={areaId} href={(id) => `/thanh-vien?kv=${id}`} />}
       <Section title={`Tạo tài khoản · ${areaName}`}>
         <CreateMemberForm key={areaId} areaId={areaId} />
       </Section>

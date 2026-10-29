@@ -75,10 +75,10 @@ export function AreaRow({ area, candidates }: { area: AreaAdminView; candidates:
           Thành viên
         </Link>
         <button type="button" className={small} aria-expanded={panel === "assign"} onClick={() => toggle("assign")}>
-          Gán khu vực trưởng
+          Gán KVT
         </button>
         <button type="button" className={small} aria-expanded={panel === "create"} onClick={() => toggle("create")}>
-          Tạo tài khoản trưởng
+          Tạo tài khoản KVT
         </button>
         <button type="button" className={small} aria-expanded={panel === "rename"} onClick={() => toggle("rename")}>
           Đổi tên

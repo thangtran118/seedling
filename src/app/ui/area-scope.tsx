@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { AreaOption } from "@/lib/access/areas";
 import type { SessionUser } from "@/lib/access/auth";
 import { isRegionLeader } from "@/lib/access/scope";
+import { AreaSelect } from "./area-select";
 
 // The "Của tôi / Khu vực / Địa vực" tabs of the Hôm nay, Lịch, Chiên and Thống kê pages, in the URL as ?xem=.
 // - cua-toi: the viewer's own (sessions they are in, listeners they walk with), in any area of the region;
@@ -56,7 +57,8 @@ export function viewQuery(scope: ViewScope, next: { view?: View; kv?: string }, 
   return s ? `?${s}` : "";
 }
 
-// Three equal tabs (two for the region leader); counts optional. Under them, for the region leader on the Địa vực tab only, one chip per area.
+// Three equal tabs (two for the region leader); counts optional. Under them, for the region leader on the Địa vực tab
+// only, a picker to narrow it to one area.
 export function ViewTabs({
   user,
   areas,
@@ -97,30 +99,13 @@ export function ViewTabs({
         </ul>
       </nav>
       {pickArea && (
-        <nav aria-label="Khu vực trong địa vực" className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
-          <ul className="flex w-max gap-2">
-            {[{ id: 0, name: "Cả địa vực" }, ...areas].map((a) => {
-              const key = a.id ? String(a.id) : "";
-              const on = key === scope.kv;
-              return (
-                <li key={a.id}>
-                  <Link
-                    href={href({ view: "dia-vuc", kv: key })}
-                    scroll={false}
-                    aria-current={on ? "true" : undefined}
-                    className={`inline-flex h-9 items-center whitespace-nowrap rounded-full px-3.5 text-sm transition-colors ${
-                      on
-                        ? "bg-accent font-semibold text-on-accent"
-                        : "border border-line bg-surface text-ink hover:bg-sunken"
-                    }`}
-                  >
-                    {a.name}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+        <AreaSelect
+          value={scope.kv}
+          options={[{ id: 0, name: "Cả địa vực" }, ...areas].map((a) => {
+            const kv = a.id ? String(a.id) : "";
+            return { value: kv, label: a.name, href: href({ view: "dia-vuc", kv }) };
+          })}
+        />
       )}
     </div>
   );
@@ -147,8 +132,8 @@ export function viewCounts<T>(
   return { "cua-toi": of("cua-toi"), "khu-vuc": user.areaId === null ? 0 : of("khu-vuc"), "dia-vuc": of("dia-vuc") };
 }
 
-// One chip per area of the region (the viewer's own first), for the region leader's Thành viên screen.
-export function AreaChips({
+// The region leader's Thành viên screen: which area's accounts.
+export function AreaPicker({
   areas,
   current,
   href,
@@ -159,28 +144,9 @@ export function AreaChips({
 }) {
   if (areas.length < 2) return null;
   return (
-    <nav aria-label="Khu vực" className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
-      <ul className="flex w-max gap-2">
-        {areas.map((a) => {
-          const on = a.id === current;
-          return (
-            <li key={a.id}>
-              <Link
-                href={href(a.id)}
-                scroll={false}
-                aria-current={on ? "true" : undefined}
-                className={`inline-flex h-9 items-center whitespace-nowrap rounded-full px-3.5 text-sm transition-colors ${
-                  on
-                    ? "bg-accent font-semibold text-on-accent"
-                    : "border border-line bg-surface text-ink hover:bg-sunken"
-                }`}
-              >
-                {a.name}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <AreaSelect
+      value={String(current)}
+      options={areas.map((a) => ({ value: String(a.id), label: a.name, href: href(a.id) }))}
+    />
   );
 }
