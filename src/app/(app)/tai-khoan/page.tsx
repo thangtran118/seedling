@@ -58,7 +58,7 @@ async function Account() {
               href="/thanh-vien"
               icon="M10 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-6 9c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"
               title="Thành viên"
-              note="Thêm người, cấp lại mật khẩu"
+              note="Thêm ae mới, cấp lại mật khẩu"
             />
           </Section>
         </div>
