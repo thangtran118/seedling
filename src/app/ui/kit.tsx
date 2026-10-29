@@ -326,8 +326,8 @@ export function FabStack({ children }: { children: ReactNode }) {
   // The layout's bottom padding clears one button; the spacer clears the rest so the page's end can scroll past the stack.
   return (
     <>
-      <div aria-hidden className="h-16 md:hidden" />
-      <div className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 flex flex-col items-end gap-3 md:hidden">
+      <div aria-hidden className="h-12 md:hidden" />
+      <div className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 flex flex-col items-end gap-2 md:hidden">
         {children}
       </div>
     </>
@@ -340,9 +340,9 @@ export function Fab({ href, secondary, children }: { href: string; secondary?: b
   return (
     <Link
       href={href}
-      className={`flex h-14 items-center gap-2 rounded-full pr-5 pl-4 text-base font-semibold shadow-lg shadow-black/20 active:scale-[0.98] ${tone}`}
+      className={`flex h-11 items-center gap-1.5 rounded-full pr-4 pl-3 text-sm font-semibold shadow-lg shadow-black/20 active:scale-[0.98] ${tone}`}
     >
-      <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden>
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden>
         <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       </svg>
       {children}
