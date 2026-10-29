@@ -11,6 +11,7 @@ import { ContactList } from "@/app/ui/contact";
 import {
   Card,
   HeaderAction,
+  KindIcon,
   LessonDots,
   Loading,
   Notice,
@@ -50,11 +51,12 @@ async function Detail({
   );
   const phase = sessionPhase(s.state, s.startsAt);
   const day = dayKey(s.startsAt);
+  const outreach = s.kind === "outreach";
 
   return (
     <>
       <PageHeader
-        title="Ca trudo"
+        title={outreach ? "Đi tiếp xúc" : "Ca trudo"}
         back="/lich"
         action={
           s.canEdit ? (
@@ -66,7 +68,11 @@ async function Detail({
       />
       {saved && <Notice tone="success">Đã lưu.</Notice>}
       {phase === "cancelled" && <Notice tone="warn">Ca này đã bị hủy. Dữ liệu vẫn được lưu trong lịch sử.</Notice>}
-      {phase === "done" && <Notice tone="success">Ca đã hoàn thành và được lưu vào lịch sử của chiên.</Notice>}
+      {phase === "done" && (
+        <Notice tone="success">
+          {outreach ? "Ca đã hoàn thành." : "Ca đã hoàn thành và được lưu vào lịch sử của chiên."}
+        </Notice>
+      )}
 
       <div className="-mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <p className={`text-xl font-bold capitalize text-ink ${s.state === "cancelled" ? "line-through" : ""}`}>
@@ -84,15 +90,19 @@ async function Detail({
         </ActionForm>
       )}
 
-      <Section title={s.listeners.length > 1 ? `Chiên (${s.listeners.length})` : "Chiên"}>
-        <div className={`grid grid-cols-1 gap-3 ${people.length > 1 ? "md:grid-cols-2" : ""}`}>
-          {people.map((l) => (
-            <ListenerPanel key={l.id} l={l} />
-          ))}
-        </div>
-      </Section>
+      {outreach ? (
+        <OutreachNote showAdd={s.isMember && phase !== "upcoming" && phase !== "cancelled"} />
+      ) : (
+        <Section title={s.listeners.length > 1 ? `Chiên (${s.listeners.length})` : "Chiên"}>
+          <div className={`grid grid-cols-1 gap-3 ${people.length > 1 ? "md:grid-cols-2" : ""}`}>
+            {people.map((l) => (
+              <ListenerPanel key={l.id} l={l} />
+            ))}
+          </div>
+        </Section>
+      )}
 
-      <Section title="Địa điểm chia sẻ">
+      <Section title={outreach ? "Khu vực tiếp xúc" : "Địa điểm chia sẻ"}>
         <div className="flex gap-3 rounded-2xl border border-line bg-surface p-4">
           <span className="mt-0.5 shrink-0 text-accent" aria-hidden>
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
@@ -165,6 +175,30 @@ async function Detail({
         </div>
       )}
     </>
+  );
+}
+
+// Outreach has no listener yet: say what the session is, and once it is under way point the people in it at
+// recording whoever they met.
+function OutreachNote({ showAdd }: { showAdd: boolean }) {
+  return (
+    <div className="flex gap-3 rounded-2xl border border-line bg-surface p-4">
+      <span className="mt-0.5 text-accent">
+        <KindIcon kind="outreach" size={22} />
+      </span>
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="font-semibold text-ink">Đi tiếp xúc, làm quen người mới</p>
+        <p className="text-sm text-muted">Gõ cửa, phát tờ rơi, trò chuyện ở khu vực bên dưới. Ca này không có chiên.</p>
+        {showAdd && (
+          <Link
+            href="/nguoi-nghe/moi"
+            className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-accent underline underline-offset-2"
+          >
+            Gặp được ai? + Thêm chiên
+          </Link>
+        )}
+      </div>
+    </div>
   );
 }
 

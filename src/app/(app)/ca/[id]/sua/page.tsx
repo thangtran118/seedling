@@ -41,6 +41,7 @@ async function Edit({ params }: { params: PageProps<"/ca/[id]/sua">["params"] })
         members={memberChoices.map(({ id: mid, name }) => ({ id: mid, name }))}
         submit={updateSessionAction.bind(null, s.id)}
         initial={{
+          kind: s.kind,
           listenerIds: s.listeners.map((l) => l.id),
           memberIds: s.members.map((m) => m.id),
           startsAt: toLocalInputValue(s.startsAt),

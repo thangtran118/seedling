@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { SessionListItem } from "@/lib/access/sessions";
 import { dayKey, formatTime, sessionPhase, WEEKDAY_SHORT, weekdayIndex } from "@/lib/domain";
-import { PHASE_TONE, PhaseBadge } from "./kit";
+import { KindIcon, PHASE_TONE, PhaseBadge } from "./kit";
 
 const names = (xs: { name: string }[]) => xs.map((x) => x.name).join(", ");
 
@@ -68,7 +68,14 @@ export function SessionCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <span className={`truncate font-semibold ${phase === "cancelled" ? "text-muted line-through" : "text-ink"}`}>
-            <ListenerNames listeners={s.listeners} />
+            {s.kind === "outreach" ? (
+              <span className="inline-flex items-center gap-1.5">
+                <KindIcon kind="outreach" size={16} />
+                Đi tiếp xúc
+              </span>
+            ) : (
+              <ListenerNames listeners={s.listeners} />
+            )}
           </span>
           {compact ? (
             s.isMember && (

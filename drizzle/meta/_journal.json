@@ -43,6 +43,13 @@
       "when": 1792747332021,
       "tag": "0005_session_map_url",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793246923767,
+      "tag": "0006_session_kind",
+      "breakpoints": true
     }
   ]
 }

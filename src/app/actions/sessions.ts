@@ -23,6 +23,7 @@ const text = z
   .transform((v) => v ?? null);
 
 const payloadSchema = z.object({
+  kind: z.enum(["visit", "outreach"]).default("visit"),
   listenerIds: z.array(id).default([]),
   memberIds: z.array(id).default([]),
   startsAt: z.string(),

@@ -4,7 +4,6 @@ import { listListeners } from "@/lib/access/listeners";
 import { listAreaMembers } from "@/lib/access/members";
 import { dayKey, floorToQuarterHour, parseDayKey, toLocalInputValue } from "@/lib/domain";
 import { firstParam } from "./load";
-import { Empty, TextLink } from "./kit";
 import { SessionForm } from "./session-form";
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -33,14 +32,8 @@ export async function SessionEntry({
   // Planning is for direct companions only: only the viewer's own listeners can be picked.
   const listeners = all.filter((l) => l.linked);
   const selected = listeners.find((l) => l.id === preselect);
-  if (listeners.length === 0) {
-    return (
-      <Empty action={<TextLink href="/nguoi-nghe/moi">+ Thêm chiên</TextLink>}>
-        Bạn chưa đồng hành với chiên nào nên chưa đặt lịch được. Người đồng hành hoặc khu vực trưởng có thể thêm bạn vào
-        phần “Người đồng hành” của chiên đó.
-      </Empty>
-    );
-  }
+  // ?loai=tiep-xuc opens on outreach; so does having no listener to visit (the form explains why).
+  const kind = listeners.length === 0 || firstParam(sp.loai) === "tiep-xuc" ? "outreach" : "visit";
 
   return (
     <SessionForm
@@ -50,6 +43,7 @@ export async function SessionEntry({
       members={members.map(({ id, name }) => ({ id, name }))}
       submit={planSessionAction}
       initial={{
+        kind,
         listenerIds: selected ? [selected.id] : [],
         memberIds: [],
         startsAt: defaultStartsAt(day),

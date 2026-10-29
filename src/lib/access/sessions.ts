@@ -11,7 +11,7 @@ import {
   sessions,
   users,
 } from "@/db/schema";
-import { isOpenPhase, nextLesson, sessionPhase, TIME_ZONE, type SessionState } from "@/lib/domain";
+import { isOpenPhase, nextLesson, sessionPhase, TIME_ZONE, type SessionKind, type SessionState } from "@/lib/domain";
 import type { SessionUser } from "./auth";
 import { historyVisibleListenerIds, lessonsHeardFor } from "./listeners";
 import { forbiddenError, invalidError, notFoundError } from "./errors";
@@ -22,6 +22,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type SessionListItem = {
   id: string;
+  kind: SessionKind;
   startsAt: Date;
   state: SessionState;
   locationLabel: string | null;
@@ -36,7 +37,7 @@ export type SessionListItem = {
 
 export type SessionDetail = SessionListItem & {
   createdBy: { id: string; name: string };
-  canEdit: boolean; // upcoming or in progress, and linked to at least one listener of the session
+  canEdit: boolean; // upcoming or in progress, and linked to a listener of the session (outreach: its creator)
   canCancel: boolean; // upcoming or in progress, and the viewer created it
   private: { summary: string | null } | null;
 };
@@ -105,18 +106,21 @@ function validateDetails(input: DetailsInput) {
   };
 }
 
-async function validateComposition(viewer: SessionUser, input: CompositionInput) {
+async function validateComposition(viewer: SessionUser, kind: SessionKind, input: CompositionInput) {
   const listenerIds = unique(input.listenerIds);
   const memberIds = unique(input.memberIds);
-  // Only the floor is checked: how many people go is up to the team.
-  if (listenerIds.length < 1) throw invalidError("Chọn ít nhất một chiên.");
+  // Only the floor is checked: how many people go is up to the team. Outreach goes to meet new people: no listener.
+  if (kind === "visit" && listenerIds.length < 1) throw invalidError("Chọn ít nhất một chiên.");
+  if (kind === "outreach" && listenerIds.length > 0) throw invalidError("Ca đi tiếp xúc không chọn chiên.");
   if (memberIds.length < 1) throw invalidError("Cần ít nhất một người trudo.");
 
-  const listenerRows = await db
-    .select({ id: listeners.id })
-    .from(listeners)
-    .where(and(inArray(listeners.id, listenerIds), eq(listeners.areaId, viewer.areaId)));
-  if (listenerRows.length !== listenerIds.length) throw invalidError("Chiên không hợp lệ.");
+  if (listenerIds.length) {
+    const listenerRows = await db
+      .select({ id: listeners.id })
+      .from(listeners)
+      .where(and(inArray(listeners.id, listenerIds), eq(listeners.areaId, viewer.areaId)));
+    if (listenerRows.length !== listenerIds.length) throw invalidError("Chiên không hợp lệ.");
+  }
 
   const memberRows = await db
     .select({ id: users.id })
@@ -159,7 +163,9 @@ async function findSameDay(
 async function writeComposition(tx: Tx, sessionId: string, c: CompositionInput) {
   await tx.delete(sessionListeners).where(eq(sessionListeners.sessionId, sessionId));
   await tx.delete(sessionMembers).where(eq(sessionMembers.sessionId, sessionId));
-  await tx.insert(sessionListeners).values(c.listenerIds.map((listenerId) => ({ sessionId, listenerId })));
+  if (c.listenerIds.length) {
+    await tx.insert(sessionListeners).values(c.listenerIds.map((listenerId) => ({ sessionId, listenerId })));
+  }
   await tx.insert(sessionMembers).values(c.memberIds.map((userId) => ({ sessionId, userId })));
 }
 
@@ -211,10 +217,15 @@ async function requireLinkedToAll(viewer: SessionUser, listenerIds: string[]) {
   }
 }
 
-// Design decision: edit only by users linked to a listener of the session, and only while it is still open.
+// Design decision: edit only by users linked to a listener of the session (outreach: only its creator), and only
+// while it is still open.
 async function requireEditable(viewer: SessionUser, sessionId: string) {
   const row = await loadSession(viewer, sessionId);
   if (!isOpen(row)) throw invalidError("Ca đã hoàn thành hoặc đã hủy, không sửa được nữa.");
+  if (row.kind === "outreach") {
+    if (row.createdBy !== viewer.id) throw forbiddenError("Chỉ người tạo ca mới được sửa ca đi tiếp xúc.");
+    return row;
+  }
   if ((await linkedCount(viewer.id, await sessionListenerIds(sessionId))) === 0) {
     throw forbiddenError("Chỉ người đồng hành với chiên trong ca mới được sửa ca này.");
   }
@@ -225,16 +236,16 @@ async function requireEditable(viewer: SessionUser, sessionId: string) {
 
 // "Đặt lịch trudo": a session with the planner as first member; others join from the area calendar. It completes
 // on its own 2 hours after it starts unless cancelled. Only users linked to every listener in it may plan (the area
-// leader has no special right).
+// leader has no special right). An outreach session has no listener, so anyone in the area may plan one.
 export async function planSession(
   viewer: SessionUser,
-  input: { listenerIds: string[] } & DetailsInput & { confirmDistinct?: boolean },
+  input: { kind: SessionKind; listenerIds: string[] } & DetailsInput & { confirmDistinct?: boolean },
 ): Promise<WriteResult> {
   const details = validateDetails(input);
   if (!details.locationLabel) throw invalidError("Cần nhập nơi gặp để người khác biết mà tham gia.");
-  const c = await validateComposition(viewer, { listenerIds: input.listenerIds, memberIds: [viewer.id] });
+  const c = await validateComposition(viewer, input.kind, { listenerIds: input.listenerIds, memberIds: [viewer.id] });
   await requireLinkedToAll(viewer, c.listenerIds);
-  if (!input.confirmDistinct) {
+  if (input.kind === "visit" && !input.confirmDistinct) {
     const duplicates = await findSameDay(c.listenerIds, details.startsAt, { states: ["planned"] });
     if (duplicates.length) return { ok: false, duplicates };
   }
@@ -244,6 +255,7 @@ export async function planSession(
       .values({
         areaId: viewer.areaId,
         createdBy: viewer.id,
+        kind: input.kind,
         startsAt: details.startsAt,
         locationLabel: details.locationLabel,
         mapUrl: details.mapUrl,
@@ -286,9 +298,9 @@ export async function updateSession(
   sessionId: string,
   input: Pick<CompositionInput, "memberIds"> & DetailsInput,
 ) {
-  await requireEditable(viewer, sessionId);
+  const row = await requireEditable(viewer, sessionId);
   const details = validateDetails(input);
-  const c = await validateComposition(viewer, { ...input, listenerIds: await sessionListenerIds(sessionId) });
+  const c = await validateComposition(viewer, row.kind, { ...input, listenerIds: await sessionListenerIds(sessionId) });
   await db.transaction(async (tx) => {
     await tx
       .update(sessions)
@@ -338,6 +350,7 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
     const isMember = members.some((m) => m.id === viewer.id);
     return {
       id: r.id,
+      kind: r.kind,
       startsAt: r.startsAt,
       state: r.state,
       locationLabel: r.locationLabel,
@@ -364,8 +377,10 @@ export async function getSessionDetail(viewer: SessionUser, sessionId: string): 
   if (!(await canSeeSession(viewer, item))) throw notFoundError("Không tìm thấy ca.");
   const [creator] = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.id, row.createdBy));
   const linked = (await linkedCount(viewer.id, listenerIds)) > 0;
-  // Matrix: linked users and the area leader always; unlinked members only when they are in the session.
-  const canSeePrivate = linked || item.isMember || viewer.role === "area_leader";
+  const outreach = row.kind === "outreach";
+  // Matrix: linked users and the area leader always; unlinked members only when they are in the session. Outreach
+  // notes are about no listener: the whole area reads them.
+  const canSeePrivate = outreach || linked || item.isMember || viewer.role === "area_leader";
   let priv: SessionDetail["private"] = null;
   if (canSeePrivate) {
     const [p] = await db.select().from(sessionPrivate).where(eq(sessionPrivate.sessionId, sessionId));
@@ -375,7 +390,7 @@ export async function getSessionDetail(viewer: SessionUser, sessionId: string): 
   return {
     ...item,
     createdBy: creator,
-    canEdit: linked && isOpen(row),
+    canEdit: (outreach ? row.createdBy === viewer.id : linked) && isOpen(row),
     canCancel: row.createdBy === viewer.id && isOpen(row),
     private: priv,
   };
@@ -398,7 +413,7 @@ export async function listAreaUpcoming(viewer: SessionUser): Promise<SessionList
 }
 
 // Calendar and "today" board: sessions of the area starting in [from, to). Open ones for everyone; completed and
-// cancelled ones only where the viewer may see the listening history (see canSeeSession).
+// cancelled ones only where the viewer may see the listening history (see canSeeSession); outreach ones for everyone.
 export async function listAreaSessionsBetween(viewer: SessionUser, from: Date, to: Date): Promise<SessionListItem[]> {
   const rows = await db
     .select()
@@ -410,11 +425,13 @@ export async function listAreaSessionsBetween(viewer: SessionUser, from: Date, t
     viewer,
     items.flatMap((s) => s.listeners.map((l) => l.id)),
   );
-  return items.filter((s) => isOpen(s) || s.isMember || s.listeners.some((l) => visible.has(l.id)));
+  return items.filter(
+    (s) => s.kind === "outreach" || isOpen(s) || s.isMember || s.listeners.some((l) => visible.has(l.id)),
+  );
 }
 
 async function canSeeSession(viewer: SessionUser, s: SessionListItem) {
-  if (isOpen(s) || s.isMember) return true;
+  if (s.kind === "outreach" || isOpen(s) || s.isMember) return true;
   const visible = await historyVisibleListenerIds(
     viewer,
     s.listeners.map((l) => l.id),

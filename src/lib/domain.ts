@@ -7,6 +7,7 @@ export const LESSONS = [1, 2, 3, 4, 5, 6, 7] as const;
 export type ManualStatus = "moi_quen" | "goi_mo" | "baptem" | "tu_choi";
 // Stored state. Whether a session is upcoming, in progress or completed follows from its start time (sessionPhase).
 export type SessionState = "planned" | "cancelled";
+export type SessionKind = "visit" | "outreach";
 
 export const STATUS_LABEL: Record<ManualStatus, string> = {
   moi_quen: "Mới quen",

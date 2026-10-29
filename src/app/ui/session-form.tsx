@@ -1,10 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { SessionFormResult, SessionPayload } from "@/app/actions/sessions";
-import { formatDateTime, isOpenPhase, PHASE_LABEL, sessionPhase, stageLabel, type Stage } from "@/lib/domain";
-import { INPUT } from "./kit";
+import {
+  formatDateTime,
+  isOpenPhase,
+  PHASE_LABEL,
+  sessionPhase,
+  stageLabel,
+  type SessionKind,
+  type Stage,
+} from "@/lib/domain";
+import { INPUT, KindIcon } from "./kit";
 
 export type PickListener = { id: string; name: string; stage: Stage; linked: boolean };
 export type PickMember = { id: string; name: string };
@@ -17,6 +25,7 @@ export type SessionFormProps = {
   listeners: PickListener[]; // choosable listeners (plan) or the fixed ones (edit)
   members: PickMember[];
   initial: {
+    kind: SessionKind; // only chosen when planning
     listenerIds: string[];
     memberIds: string[];
     startsAt: string; // datetime-local value, Vietnam time
@@ -26,6 +35,11 @@ export type SessionFormProps = {
   };
   submit: (payload: SessionPayload) => Promise<SessionFormResult>;
 };
+
+const KINDS: { kind: SessionKind; label: string }[] = [
+  { kind: "visit", label: "Gặp chiên" },
+  { kind: "outreach", label: "Đi tiếp xúc" },
+];
 
 const TITLE: Record<Mode, string> = {
   plan: "Đặt lịch",
@@ -37,6 +51,10 @@ export function SessionForm(props: SessionFormProps) {
   const fixedListeners = mode === "edit";
   const recorderFixed = mode === "plan";
 
+  const [kind, setKind] = useState<SessionKind>(initial.kind);
+  const outreach = kind === "outreach";
+  // Planning a visit needs a listener the planner accompanies; without one only outreach is open.
+  const canVisit = listeners.length > 0;
   const [listenerIds, setListenerIds] = useState<string[]>(initial.listenerIds);
   const [memberIds, setMemberIds] = useState<string[]>(initial.memberIds);
   const [startsAt, setStartsAt] = useState(initial.startsAt);
@@ -44,7 +62,6 @@ export function SessionForm(props: SessionFormProps) {
   const [mapUrl, setMapUrl] = useState(initial.mapUrl);
   const [summary, setSummary] = useState(initial.summary);
   const [showSummary, setShowSummary] = useState(Boolean(initial.summary));
-  const [query, setQuery] = useState("");
   // Missing required fields, shown only after a submit attempt so an empty form does not open in red.
   const [tried, setTried] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,11 +69,6 @@ export function SessionForm(props: SessionFormProps) {
     Extract<SessionFormResult, { duplicates: unknown }>["duplicates"] | null
   >(null);
   const [pending, startTransition] = useTransition();
-
-  const visibleListeners = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return listeners.filter((l) => !q || l.name.toLowerCase().includes(q));
-  }, [listeners, query]);
 
   const others = members.filter((m) => !(recorderFixed && m.id === currentUserId));
   const totalMembers = (recorderFixed ? 1 : 0) + memberIds.length;
@@ -78,7 +90,8 @@ export function SessionForm(props: SessionFormProps) {
     setError(null);
     startTransition(async () => {
       const result = await submit({
-        listenerIds,
+        kind,
+        listenerIds: outreach ? [] : listenerIds,
         memberIds,
         startsAt,
         locationLabel,
@@ -93,7 +106,7 @@ export function SessionForm(props: SessionFormProps) {
   }
 
   const missing = {
-    listeners: listenerIds.length === 0,
+    listeners: !outreach && listenerIds.length === 0,
     members: mode !== "plan" && totalMembers < 1,
     startsAt: !startsAt,
     location: mode === "plan" && !locationLabel.trim(),
@@ -113,60 +126,58 @@ export function SessionForm(props: SessionFormProps) {
         send(false);
       }}
     >
+      {/* 0. Kind: meeting known listeners, or going out to meet new people (no listener to pick). */}
+      {mode === "plan" && (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="sr-only">Loại ca</legend>
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-sunken p-1">
+            {KINDS.map((k) => {
+              const on = kind === k.kind;
+              const disabled = k.kind === "visit" && !canVisit;
+              return (
+                <button
+                  type="button"
+                  key={k.kind}
+                  aria-pressed={on}
+                  disabled={disabled}
+                  onClick={() => setKind(k.kind)}
+                  className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                    on ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  <KindIcon kind={k.kind} />
+                  {k.label}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
+
       {/* 1. Listeners */}
-      <fieldset className="flex flex-col gap-2" data-missing={show("listeners") || undefined}>
-        <legend className="mb-1 text-sm font-semibold text-ink">
-          Chiên {!fixedListeners && <Required />}
-          {listenerIds.length > 0 && !fixedListeners && (
-            <span className="font-normal text-muted"> · đã chọn {listenerIds.length}</span>
-          )}
-        </legend>
-        {fixedListeners ? (
-          <p className="text-base text-ink">{listeners.map((l) => l.name).join(", ")}</p>
-        ) : (
-          <>
-            {listeners.length > 6 && (
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Tìm tên…"
-                aria-label="Tìm chiên theo tên"
-                type="search"
-                className={`${INPUT} h-11`}
-              />
+      {!outreach && (
+        <fieldset className="flex flex-col gap-2" data-missing={show("listeners") || undefined}>
+          <legend className="mb-1 text-sm font-semibold text-ink">
+            Chiên {!fixedListeners && <Required />}
+            {listenerIds.length > 0 && !fixedListeners && (
+              <span className="font-normal text-muted"> · đã chọn {listenerIds.length}</span>
             )}
-            <div className="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
-              {visibleListeners.map((l) => {
-                const on = listenerIds.includes(l.id);
-                return (
-                  <button
-                    type="button"
-                    key={l.id}
-                    onClick={() => toggleListener(l.id)}
-                    aria-pressed={on}
-                    className={`flex min-h-12 items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
-                      on ? "border-accent bg-accent/10" : "border-line bg-surface hover:bg-sunken"
-                    }`}
-                  >
-                    <Check on={on} />
-                    <span className="flex-1 font-medium text-ink">{l.name}</span>
-                    <span className="text-xs text-muted">{stageLabel(l.stage)}</span>
-                  </button>
-                );
-              })}
-              {visibleListeners.length === 0 && (
-                <p className="text-sm text-muted">
-                  Không có ai.{" "}
-                  <Link href="/nguoi-nghe/moi" className="text-accent underline">
-                    Thêm chiên
-                  </Link>
-                </p>
-              )}
-            </div>
-            {show("listeners") && <FieldError>Chọn ít nhất một chiên.</FieldError>}
-          </>
-        )}
-      </fieldset>
+          </legend>
+          {fixedListeners ? (
+            <p className="text-base text-ink">{listeners.map((l) => l.name).join(", ")}</p>
+          ) : (
+            <>
+              <ListenerSelect
+                listeners={listeners}
+                selected={listenerIds}
+                onToggle={toggleListener}
+                invalid={show("listeners")}
+              />
+              {show("listeners") && <FieldError>Chọn ít nhất một chiên.</FieldError>}
+            </>
+          )}
+        </fieldset>
+      )}
 
       {/* 2. Companions */}
       {mode !== "plan" && (
@@ -222,18 +233,19 @@ export function SessionForm(props: SessionFormProps) {
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-semibold text-ink">
-            Nơi gặp {mode === "plan" ? <Required /> : <span className="font-normal text-muted">(không bắt buộc)</span>}
+            {outreach ? "Khu vực tiếp xúc" : "Nơi gặp"}{" "}
+            {mode === "plan" ? <Required /> : <span className="font-normal text-muted">(không bắt buộc)</span>}
           </span>
           <input
             value={locationLabel}
             onChange={(e) => setLocationLabel(e.target.value)}
             maxLength={80}
-            placeholder="VD: Quán cafe Kết"
+            placeholder={outreach ? "VD: Công viên Phùng Khoang" : "VD: Quán cafe Kết"}
             data-missing={show("location") || undefined}
             aria-invalid={show("location") || undefined}
             className={`${INPUT} h-12`}
           />
-          {show("location") && <FieldError>Nhập nơi gặp.</FieldError>}
+          {show("location") && <FieldError>{outreach ? "Nhập khu vực tiếp xúc." : "Nhập nơi gặp."}</FieldError>}
         </label>
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-semibold text-ink">
@@ -327,6 +339,147 @@ function FieldError({ children }: { children: string }) {
     <span role="alert" className="text-sm font-medium text-danger">
       {children}
     </span>
+  );
+}
+
+// Multi-select: a field that opens a searchable list with tick boxes; picked listeners show as removable chips.
+function ListenerSelect({
+  listeners,
+  selected,
+  onToggle,
+  invalid,
+}: {
+  listeners: PickListener[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  invalid: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const root = useRef<HTMLDivElement>(null);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return listeners.filter((l) => !q || l.name.toLowerCase().includes(q));
+  }, [listeners, query]);
+  const picked = listeners.filter((l) => selected.includes(l.id));
+
+  // Close on a tap outside or Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={root} className="relative flex flex-col gap-2">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className={`${INPUT} flex h-12 cursor-pointer items-center justify-between gap-2 text-left ${invalid ? "border-danger!" : ""}`}
+      >
+        <span className={picked.length ? "text-ink" : "text-muted"}>
+          {picked.length ? `Đã chọn ${picked.length} chiên` : "Chọn chiên…"}
+        </span>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden
+          className={`shrink-0 text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        >
+          <path d="m4 6 4 4 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute inset-x-0 top-[3.25rem] z-20 flex flex-col gap-2 rounded-xl border border-line bg-surface p-2 shadow-lg shadow-black/15">
+          {listeners.length > 6 && (
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Tìm tên…"
+              aria-label="Tìm chiên theo tên"
+              type="search"
+              autoFocus
+              className={`${INPUT} h-11`}
+            />
+          )}
+          <div role="listbox" aria-multiselectable className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
+            {visible.map((l) => {
+              const on = selected.includes(l.id);
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={on}
+                  key={l.id}
+                  onClick={() => onToggle(l.id)}
+                  className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                    on ? "bg-accent/10" : "hover:bg-sunken"
+                  }`}
+                >
+                  <Check on={on} />
+                  <span className="flex-1 font-medium text-ink">{l.name}</span>
+                  <span className="text-xs text-muted">{stageLabel(l.stage)}</span>
+                </button>
+              );
+            })}
+            {visible.length === 0 && (
+              <p className="px-2.5 py-2 text-sm text-muted">
+                Không có ai.{" "}
+                <Link href="/nguoi-nghe/moi" className="text-accent underline">
+                  Thêm chiên
+                </Link>
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="h-11 cursor-pointer rounded-lg bg-accent text-sm font-semibold text-on-accent"
+          >
+            Xong
+          </button>
+        </div>
+      )}
+
+      {picked.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {picked.map((l) => (
+            <span
+              key={l.id}
+              className="inline-flex h-9 items-center gap-1 rounded-full bg-accent/10 pl-3 pr-1 text-sm font-medium text-ink"
+            >
+              {l.name}
+              <button
+                type="button"
+                onClick={() => onToggle(l.id)}
+                aria-label={`Bỏ chọn ${l.name}`}
+                className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-accent/15 hover:text-ink"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+                  <path d="m3 3 6 6M9 3 3 9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

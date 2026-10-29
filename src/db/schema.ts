@@ -23,6 +23,8 @@ const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull(
 export const roleEnum = pgEnum("role", ["member", "area_leader"]);
 export const manualStatusEnum = pgEnum("manual_status", ["moi_quen", "goi_mo", "baptem", "tu_choi"]);
 export const sessionStateEnum = pgEnum("session_state", ["planned", "cancelled"]);
+// visit: meeting chosen listeners. outreach: going out to meet new people at a place (gõ cửa…), with no listener.
+export const sessionKindEnum = pgEnum("session_kind", ["visit", "outreach"]);
 
 export const areas = pgTable("areas", {
   id: id(),
@@ -115,6 +117,7 @@ export const sessions = pgTable("sessions", {
   createdBy: uuid("created_by")
     .notNull()
     .references(() => users.id),
+  kind: sessionKindEnum("kind").notNull().default("visit"),
   startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
   locationLabel: varchar("location_label", { length: 80 }),
   mapUrl: varchar("map_url", { length: 500 }),

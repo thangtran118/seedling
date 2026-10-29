@@ -2,7 +2,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BackLink } from "./back-link";
-import { LESSONS, PHASE_LABEL, stageLabel, type SessionPhase, type Stage } from "@/lib/domain";
+import { LESSONS, PHASE_LABEL, stageLabel, type SessionKind, type SessionPhase, type Stage } from "@/lib/domain";
 
 // actionDesktopOnly: phones get the same action as a floating button under the thumb (FabStack) instead.
 export function PageHeader({
@@ -92,6 +92,30 @@ const STAGE_TONE = {
 };
 
 // The one status shown for a listener everywhere: Mới quen, Gợi mở, Mảnh 1-7, Báptem, Từ chối.
+// Two people (meeting listeners) or a door (going out to knock).
+export function KindIcon({ kind, size = 18 }: { kind: SessionKind; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden className="shrink-0">
+      {kind === "visit" ? (
+        <path
+          d="M7.5 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-5 8c0-2.8 2.2-5 5-5s5 2.2 5 5M13.5 3.2a3 3 0 0 1 0 5.6M15.5 12.3c1.2.8 2 2.2 2 4.7"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      ) : (
+        <path
+          d="M4.5 17.5v-14a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v14M2.5 17.5h15M12.5 10.5v.01"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+    </svg>
+  );
+}
+
 export function StageBadge({ stage, size = "sm" }: { stage: Stage; size?: "sm" | "md" }) {
   const tone = STAGE_TONE[stage in STAGE_TONE ? (stage as keyof typeof STAGE_TONE) : "lesson"];
   const text = size === "md" ? "px-2.5 py-1 text-sm font-semibold" : "px-2 py-0.5 text-xs font-medium";
