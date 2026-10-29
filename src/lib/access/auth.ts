@@ -5,7 +5,6 @@ import { and, count, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { authSessions, loginAttempts, users } from "@/db/schema";
 import { normalizePhone } from "@/lib/phone";
-import { checkPasswordPolicy } from "@/lib/password-policy";
 
 export const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 export const RATE_WINDOW_MS = 15 * 60 * 1000;
@@ -143,9 +142,6 @@ export async function changePassword(
   } else if (!(await verify(user.passwordHash, current))) {
     return { ok: false, error: "Mật khẩu hiện tại không đúng." };
   }
-  const policyError = checkPasswordPolicy(next);
-  if (policyError) return { ok: false, error: policyError };
-  if (await verify(user.passwordHash, next)) return { ok: false, error: "Mật khẩu mới phải khác mật khẩu hiện tại." };
 
   await db
     .update(users)

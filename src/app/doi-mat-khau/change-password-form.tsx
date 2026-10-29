@@ -6,7 +6,7 @@ import { changePasswordAction } from "@/app/actions/auth";
 import { FormError, SubmitButton } from "@/app/ui/form";
 import { PasswordField } from "@/app/ui/password-field";
 
-export function ChangePasswordForm({ forced, minLength }: { forced: boolean; minLength: number }) {
+export function ChangePasswordForm({ forced }: { forced: boolean }) {
   const [state, action, pending] = useActionState(changePasswordAction, undefined);
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -16,14 +16,7 @@ export function ChangePasswordForm({ forced, minLength }: { forced: boolean; min
         </p>
       )}
       {!forced && <PasswordField label="Mật khẩu hiện tại" name="current" autoComplete="current-password" required />}
-      <PasswordField
-        label="Mật khẩu mới"
-        name="next"
-        autoComplete="new-password"
-        minLength={minLength}
-        hint={`Ít nhất ${minLength} ký tự, có cả chữ và số.`}
-        required
-      />
+      <PasswordField label="Mật khẩu mới" name="next" autoComplete="new-password" required />
       <PasswordField label="Nhập lại mật khẩu mới" name="confirm" autoComplete="new-password" required />
       <FormError message={state?.error} />
       <SubmitButton pending={pending}>Lưu mật khẩu</SubmitButton>
