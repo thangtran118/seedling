@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, ilike, inArray, max, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, lte, max, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   listenerLinks,
@@ -183,31 +183,41 @@ async function logAccess(entry: typeof piiAccessLog.$inferInsert) {
 
 // ---------- reads ----------
 
-// The listener list: the area leader sees every listener of the area; a member sees only the listeners they are
-// linked to, never those of other people in charge.
-export async function listListeners(viewer: SessionUser, opts: { query?: string } = {}): Promise<ListenerSummary[]> {
+export type ListenerListItem = ListenerSummary & {
+  mine: boolean; // "Chiên bạn np": linked to the viewer, or the viewer has been on a session with them
+};
+
+// Listeners the viewer has been on a session with: started (not only planned) and not cancelled.
+async function wentWithIds(viewer: SessionUser, listenerIds: string[]): Promise<Set<string>> {
+  if (listenerIds.length === 0) return new Set();
+  const rows = await db
+    .selectDistinct({ id: sessionListeners.listenerId })
+    .from(sessionListeners)
+    .innerJoin(sessionMembers, eq(sessionMembers.sessionId, sessionListeners.sessionId))
+    .innerJoin(sessions, eq(sessions.id, sessionListeners.sessionId))
+    .where(
+      and(
+        eq(sessionMembers.userId, viewer.id),
+        ne(sessions.state, "cancelled"),
+        lte(sessions.startsAt, new Date()),
+        inArray(sessionListeners.listenerId, listenerIds),
+      ),
+    );
+  return new Set(rows.map((r) => r.id));
+}
+
+// The listener list: everyone in the area sees every listener of the area ("Chiên cả khu vực"), as a summary only
+// (name, age, status, lessons; contact details stay behind the listener page's own checks). `mine` marks the
+// viewer's own ones ("Chiên bạn np").
+export async function listListeners(viewer: SessionUser, opts: { query?: string } = {}): Promise<ListenerListItem[]> {
   const q = opts.query?.trim();
   const rows = await db
     .select()
     .from(listeners)
-    .where(
-      and(
-        eq(listeners.areaId, viewer.areaId),
-        viewer.role === "area_leader"
-          ? undefined
-          : inArray(
-              listeners.id,
-              db
-                .select({ id: listenerLinks.listenerId })
-                .from(listenerLinks)
-                .where(eq(listenerLinks.userId, viewer.id)),
-            ),
-        q ? ilike(listeners.name, `%${escapeLike(q)}%`) : undefined,
-      ),
-    )
+    .where(and(eq(listeners.areaId, viewer.areaId), q ? ilike(listeners.name, `%${escapeLike(q)}%`) : undefined))
     .orderBy(asc(listeners.name));
-  const summaries = await summarize(viewer, rows);
-  return summaries.sort((a, b) => Number(b.linked) - Number(a.linked));
+  const [summaries, went] = await Promise.all([summarize(viewer, rows), wentWithIds(viewer, rows.map((r) => r.id))]);
+  return summaries.map((l) => ({ ...l, mine: l.linked || went.has(l.id) }));
 }
 
 // Leader view of one member's listeners (the member stats page). Same summary shape as the list.
