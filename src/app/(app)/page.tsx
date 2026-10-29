@@ -9,7 +9,6 @@ import {
   formatDayLong,
   formatDuration,
   formatTime,
-  isOpenPhase,
   SESSION_LIVE_MS,
   sessionPhase,
   WEEKDAY_SHORT,
@@ -30,12 +29,6 @@ export default function HomePage(props: PageProps<"/">) {
       <Home searchParams={props.searchParams} />
     </Suspense>
   );
-}
-
-// "Bấm để tham gia" under a session the viewer can still join; nothing once they are in it.
-function joinNote(s: SessionListItem, now: Date) {
-  if (!isOpenPhase(sessionPhase(s.state, s.startsAt, now))) return undefined;
-  return !s.isMember && s.canJoin ? "Bấm để tham gia" : undefined;
 }
 
 async function Home({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
@@ -93,7 +86,7 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
           {todays.length > 0 ? (
             <div className="flex flex-col gap-2">
               {todays.map((s) => (
-                <SessionCard key={s.id} s={s} now={now} showDate={false} note={joinNote(s, now)} />
+                <SessionCard key={s.id} s={s} now={now} showDate={false} />
               ))}
             </div>
           ) : (
@@ -174,7 +167,7 @@ function PlannedByDay({ sessions, tomorrow, now }: { sessions: SessionListItem[]
             </span>
           </h3>
           {list.map((s) => (
-            <SessionCard key={s.id} s={s} now={now} showDate={false} compact note={joinNote(s, now)} />
+            <SessionCard key={s.id} s={s} now={now} showDate={false} />
           ))}
         </section>
       ))}

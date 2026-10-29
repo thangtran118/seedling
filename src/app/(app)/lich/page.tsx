@@ -56,7 +56,7 @@ const href = (month: string, day: string) => `/lich?thang=${month}&ngay=${day}`;
 
 function joinNote(s: SessionListItem, phase: SessionPhase) {
   if (!isOpenPhase(phase)) return undefined;
-  return s.isMember ? "Bạn đã tham gia" : s.canJoin ? "Bấm để tham gia" : undefined;
+  return s.isMember ? "Bạn đã tham gia" : undefined; // the card carries the "Tham gia" button otherwise
 }
 
 async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["searchParams"] }) {
