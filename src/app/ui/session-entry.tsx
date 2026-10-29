@@ -32,8 +32,8 @@ export async function SessionEntry({
   // Planning is for direct companions only: only the viewer's own listeners can be picked.
   const listeners = all.filter((l) => l.linked);
   const selected = listeners.find((l) => l.id === preselect);
-  // ?loai=tiep-xuc opens on outreach; so does having no listener to visit (the form explains why).
-  const kind = listeners.length === 0 || firstParam(sp.loai) === "tiep-xuc" ? "outreach" : "visit";
+  // ?loai=tiep-xuc opens on outreach. With no listener yet, "Gặp chiên" opens on a note leading to adding one.
+  const kind = firstParam(sp.loai) === "tiep-xuc" ? "outreach" : "visit";
 
   return (
     <SessionForm

@@ -54,8 +54,9 @@ export function SessionForm(props: SessionFormProps) {
 
   const [kind, setKind] = useState<SessionKind>(initial.kind);
   const outreach = kind === "outreach";
-  // Planning a visit needs a listener the planner accompanies; without one only outreach is open.
-  const canVisit = listeners.length > 0;
+  // Planning a visit needs a listener the planner accompanies. Without one the "Gặp chiên" tab still opens, on a
+  // note that leads to adding a listener (or to "Đi tiếp xúc") instead of the form.
+  const noListener = mode === "plan" && !outreach && listeners.length === 0;
   const [listenerIds, setListenerIds] = useState<number[]>(initial.listenerIds);
   const [memberIds, setMemberIds] = useState<number[]>(initial.memberIds);
   const [startsAt, setStartsAt] = useState(initial.startsAt);
@@ -137,15 +138,13 @@ export function SessionForm(props: SessionFormProps) {
           <div className="grid grid-cols-2 gap-1 rounded-xl bg-sunken p-1">
             {KINDS.map((k) => {
               const on = kind === k.kind;
-              const disabled = k.kind === "visit" && !canVisit;
               return (
                 <button
                   type="button"
                   key={k.kind}
                   aria-pressed={on}
-                  disabled={disabled}
                   onClick={() => setKind(k.kind)}
-                  className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  className={`inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-colors ${
                     on ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"
                   }`}
                 >
@@ -158,192 +157,231 @@ export function SessionForm(props: SessionFormProps) {
         </fieldset>
       )}
 
-      {/* 1. Listeners */}
-      {!outreach && (
-        <fieldset className="flex flex-col gap-2" data-missing={show("listeners") || undefined}>
-          <legend className="mb-1 text-sm font-semibold text-ink">
-            Chiên {!fixedListeners && <Required />}
-            {listenerIds.length > 0 && !fixedListeners && (
-              <span className="font-normal text-muted"> · đã chọn {listenerIds.length}</span>
-            )}
-          </legend>
-          {fixedListeners ? (
-            <p className="text-base text-ink">{listeners.map((l) => l.name).join(", ")}</p>
-          ) : (
-            <>
-              <ListenerSelect
-                listeners={listeners}
-                selected={listenerIds}
-                onToggle={toggleListener}
-                invalid={show("listeners")}
-              />
-              {show("listeners") && <FieldError>Chọn ít nhất một chiên.</FieldError>}
-            </>
+      {noListener ? (
+        <NoListener onOutreach={() => setKind("outreach")} />
+      ) : (
+        <>
+          {/* 1. Listeners */}
+          {!outreach && (
+            <fieldset className="flex flex-col gap-2" data-missing={show("listeners") || undefined}>
+              <legend className="mb-1 text-sm font-semibold text-ink">
+                Chiên {!fixedListeners && <Required />}
+                {listenerIds.length > 0 && !fixedListeners && (
+                  <span className="font-normal text-muted"> · đã chọn {listenerIds.length}</span>
+                )}
+              </legend>
+              {fixedListeners ? (
+                <p className="text-base text-ink">{listeners.map((l) => l.name).join(", ")}</p>
+              ) : (
+                <>
+                  <ListenerSelect
+                    listeners={listeners}
+                    selected={listenerIds}
+                    onToggle={toggleListener}
+                    invalid={show("listeners")}
+                  />
+                  {show("listeners") && <FieldError>Chọn ít nhất một chiên.</FieldError>}
+                </>
+              )}
+            </fieldset>
           )}
-        </fieldset>
-      )}
 
-      {/* 2. Companions */}
-      {mode !== "plan" && (
-        <fieldset className="flex flex-col gap-2" data-missing={show("members") || undefined}>
-          <legend className="mb-1 text-sm font-semibold text-ink">
-            Người đi cùng{" "}
-            <span className="font-normal text-muted">
-              ({totalMembers}
-              {recorderFixed ? " người, tính cả bạn" : " người"})
-            </span>
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {recorderFixed && (
-              <span className="rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-on-accent">Bạn</span>
-            )}
-            {others.map((m) => {
-              const on = memberIds.includes(m.id);
-              return (
-                <button
-                  type="button"
-                  key={m.id}
-                  aria-pressed={on}
-                  onClick={() => toggleMember(m.id)}
-                  className={`inline-flex h-10 items-center gap-1.5 rounded-full px-3.5 text-sm transition-colors ${
-                    on ? "bg-accent text-on-accent" : "border border-line bg-surface text-ink hover:bg-sunken"
-                  }`}
-                >
-                  {on && <span aria-hidden>✓</span>}
-                  {m.id === currentUserId ? `${m.name} (bạn)` : m.name}
-                </button>
-              );
-            })}
-          </div>
-          {show("members") && <FieldError>Chọn ít nhất một người đi cùng.</FieldError>}
-        </fieldset>
-      )}
+          {/* 2. Companions */}
+          {mode !== "plan" && (
+            <fieldset className="flex flex-col gap-2" data-missing={show("members") || undefined}>
+              <legend className="mb-1 text-sm font-semibold text-ink">
+                Người đi cùng{" "}
+                <span className="font-normal text-muted">
+                  ({totalMembers}
+                  {recorderFixed ? " người, tính cả bạn" : " người"})
+                </span>
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                {recorderFixed && (
+                  <span className="rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-on-accent">Bạn</span>
+                )}
+                {others.map((m) => {
+                  const on = memberIds.includes(m.id);
+                  return (
+                    <button
+                      type="button"
+                      key={m.id}
+                      aria-pressed={on}
+                      onClick={() => toggleMember(m.id)}
+                      className={`inline-flex h-10 items-center gap-1.5 rounded-full px-3.5 text-sm transition-colors ${
+                        on ? "bg-accent text-on-accent" : "border border-line bg-surface text-ink hover:bg-sunken"
+                      }`}
+                    >
+                      {on && <span aria-hidden>✓</span>}
+                      {m.id === currentUserId ? `${m.name} (bạn)` : m.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {show("members") && <FieldError>Chọn ít nhất một người đi cùng.</FieldError>}
+            </fieldset>
+          )}
 
-      {/* 3. When and where */}
-      <fieldset className="flex flex-col gap-3">
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-semibold text-ink">
-            Thời gian <Required />
-          </span>
-          <input
-            type="datetime-local"
-            value={startsAt}
-            onChange={(e) => setStartsAt(e.target.value)}
-            data-missing={show("startsAt") || undefined}
-            aria-invalid={show("startsAt") || undefined}
-            className={`${INPUT} h-12`}
-          />
-          {show("startsAt") && <FieldError>Chọn ngày giờ.</FieldError>}
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-semibold text-ink">
-            {outreach ? "Khu vực tiếp xúc" : "Nơi gặp"}{" "}
-            {mode === "plan" ? <Required /> : <span className="font-normal text-muted">(không bắt buộc)</span>}
-          </span>
-          <input
-            value={locationLabel}
-            onChange={(e) => setLocationLabel(e.target.value)}
-            maxLength={80}
-            placeholder={outreach ? "VD: Công viên Phùng Khoang" : "VD: Quán cafe Kết"}
-            data-missing={show("location") || undefined}
-            aria-invalid={show("location") || undefined}
-            className={`${INPUT} h-12`}
-          />
-          {show("location") && <FieldError>{outreach ? "Nhập khu vực tiếp xúc." : "Nhập nơi gặp."}</FieldError>}
-        </label>
-        <label className="flex flex-col gap-1.5">
-          <span className="text-sm font-semibold text-ink">
-            Link Google Maps <span className="font-normal text-muted">(không bắt buộc)</span>
-          </span>
-          <input
-            type="url"
-            inputMode="url"
-            value={mapUrl}
-            onChange={(e) => setMapUrl(e.target.value)}
-            maxLength={500}
-            placeholder="https://maps.app.goo.gl/..."
-            className={`${INPUT} h-12`}
-          />
-        </label>
-        {/* Visit sessions: notes go on each chiên (listener page or the session page), not on the session. */}
-        {mode !== "plan" &&
-          outreach &&
-          (!showSummary ? (
-            <button
-              type="button"
-              onClick={() => setShowSummary(true)}
-              className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-accent"
-            >
-              + Ghi chú
-            </button>
-          ) : (
+          {/* 3. When and where */}
+          <fieldset className="flex flex-col gap-3">
             <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-semibold text-ink">Ghi chú</span>
-              <textarea
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
-                maxLength={2000}
-                rows={3}
-                className={`${INPUT} py-2`}
+              <span className="text-sm font-semibold text-ink">
+                Thời gian <Required />
+              </span>
+              <input
+                type="datetime-local"
+                value={startsAt}
+                onChange={(e) => setStartsAt(e.target.value)}
+                data-missing={show("startsAt") || undefined}
+                aria-invalid={show("startsAt") || undefined}
+                className={`${INPUT} h-12`}
+              />
+              {show("startsAt") && <FieldError>Chọn ngày giờ.</FieldError>}
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-semibold text-ink">
+                {outreach ? "Khu vực tiếp xúc" : "Nơi gặp"}{" "}
+                {mode === "plan" ? <Required /> : <span className="font-normal text-muted">(không bắt buộc)</span>}
+              </span>
+              <input
+                value={locationLabel}
+                onChange={(e) => setLocationLabel(e.target.value)}
+                maxLength={80}
+                placeholder={outreach ? "VD: Công viên Phùng Khoang" : "VD: Quán cafe Kết"}
+                data-missing={show("location") || undefined}
+                aria-invalid={show("location") || undefined}
+                className={`${INPUT} h-12`}
+              />
+              {show("location") && <FieldError>{outreach ? "Nhập khu vực tiếp xúc." : "Nhập nơi gặp."}</FieldError>}
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-semibold text-ink">
+                Link Google Maps <span className="font-normal text-muted">(không bắt buộc)</span>
+              </span>
+              <input
+                type="url"
+                inputMode="url"
+                value={mapUrl}
+                onChange={(e) => setMapUrl(e.target.value)}
+                maxLength={500}
+                placeholder="https://maps.app.goo.gl/..."
+                className={`${INPUT} h-12`}
               />
             </label>
-          ))}
-      </fieldset>
+            {/* Visit sessions: notes go on each chiên (listener page or the session page), not on the session. */}
+            {mode !== "plan" &&
+              outreach &&
+              (!showSummary ? (
+                <button
+                  type="button"
+                  onClick={() => setShowSummary(true)}
+                  className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-accent"
+                >
+                  + Ghi chú
+                </button>
+              ) : (
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-semibold text-ink">Ghi chú</span>
+                  <textarea
+                    value={summary}
+                    onChange={(e) => setSummary(e.target.value)}
+                    maxLength={2000}
+                    rows={3}
+                    className={`${INPUT} py-2`}
+                  />
+                </label>
+              ))}
+          </fieldset>
 
-      {/* 4. AE chia sẻ chính */}
-      {mode === "plan" && !outreach && (
-        <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface px-3 py-2">
-          <input
-            type="checkbox"
-            checked={iShare}
-            onChange={(e) => setIShare(e.target.checked)}
-            className="h-5 w-5 shrink-0 accent-accent"
-          />
-          <span className="flex flex-col">
-            <span className="text-base font-semibold text-ink">Tôi chia sẻ chính</span>
-          </span>
-        </label>
-      )}
+          {/* 4. AE chia sẻ chính */}
+          {mode === "plan" && !outreach && (
+            <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface px-3 py-2">
+              <input
+                type="checkbox"
+                checked={iShare}
+                onChange={(e) => setIShare(e.target.checked)}
+                className="h-5 w-5 shrink-0 accent-accent"
+              />
+              <span className="flex flex-col">
+                <span className="text-base font-semibold text-ink">Tôi chia sẻ chính</span>
+              </span>
+            </label>
+          )}
 
-      {duplicates && (
-        <div role="alert" className="flex flex-col gap-2 rounded-lg bg-amber-500/15 p-3 text-sm text-ink">
-          <p className="font-semibold">Hôm nay đã có ca với chiên này:</p>
-          <ul className="flex flex-col gap-1">
-            {duplicates.map((d) => {
-              const phase = sessionPhase(d.state, d.startsAt);
-              return (
-                <li key={d.sessionId + d.listenerName}>
-                  <Link href={`/ca/${d.sessionId}`} className="underline">
-                    {d.listenerName} · {PHASE_LABEL[phase]} lúc {formatDateTime(d.startsAt)} · {d.createdByName} tạo
-                  </Link>
-                  {isOpenPhase(phase) ? " (mở để tham gia)" : ""}
-                </li>
-              );
-            })}
-          </ul>
+          {duplicates && (
+            <div role="alert" className="flex flex-col gap-2 rounded-lg bg-amber-500/15 p-3 text-sm text-ink">
+              <p className="font-semibold">Hôm nay đã có ca với chiên này:</p>
+              <ul className="flex flex-col gap-1">
+                {duplicates.map((d) => {
+                  const phase = sessionPhase(d.state, d.startsAt);
+                  return (
+                    <li key={d.sessionId + d.listenerName}>
+                      <Link href={`/ca/${d.sessionId}`} className="underline">
+                        {d.listenerName} · {PHASE_LABEL[phase]} lúc {formatDateTime(d.startsAt)} · {d.createdByName} tạo
+                      </Link>
+                      {isOpenPhase(phase) ? " (mở để tham gia)" : ""}
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                type="button"
+                onClick={() => send(true)}
+                disabled={pending}
+                className="h-11 self-start rounded-lg border border-line bg-surface px-3 text-sm font-semibold"
+              >
+                Đây là một ca khác, vẫn lưu
+              </button>
+            </div>
+          )}
+          {error && (
+            <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
+              {error}
+            </p>
+          )}
           <button
-            type="button"
-            onClick={() => send(true)}
+            type="submit"
             disabled={pending}
-            className="h-11 self-start rounded-lg border border-line bg-surface px-3 text-sm font-semibold"
+            className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] h-12 rounded-xl bg-accent text-base font-semibold text-on-accent shadow-lg shadow-black/15 disabled:opacity-60 md:bottom-6"
           >
-            Đây là một ca khác, vẫn lưu
+            {pending ? "Đang lưu…" : TITLE[mode]}
           </button>
-        </div>
+        </>
       )}
-      {error && (
-        <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] h-12 rounded-xl bg-accent text-base font-semibold text-on-accent shadow-lg shadow-black/15 disabled:opacity-60 md:bottom-6"
-      >
-        {pending ? "Đang lưu…" : TITLE[mode]}
-      </button>
     </form>
+  );
+}
+
+// "Gặp chiên" with no listener of one's own yet: say why and lead to adding one.
+function NoListener({ onOutreach }: { onOutreach: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line bg-surface px-4 py-8 text-center">
+      <svg width="40" height="40" viewBox="0 0 20 20" fill="none" aria-hidden className="text-muted">
+        <path
+          d="M7 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm6.5 0a2.5 2.5 0 1 0 0-5M1.5 17c0-3 2.5-5 5.5-5s5.5 2 5.5 5M13.5 12c2.6 0 5 1.8 5 5"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <div className="flex flex-col gap-1">
+        <p className="text-base font-semibold text-ink">AE np thêm thông tin chiên trước nhé ạ</p>
+      </div>
+      <Link
+        href="/nguoi-nghe/moi"
+        className="inline-flex h-12 items-center justify-center rounded-xl bg-accent px-5 text-base font-semibold text-on-accent transition-colors hover:bg-accent/90"
+      >
+        + Thêm chiên
+      </Link>
+      <button
+        type="button"
+        onClick={onOutreach}
+        className="min-h-11 cursor-pointer text-sm font-semibold text-accent underline-offset-4 hover:underline"
+      >
+        Hoặc đặt ca đi tiếp xúc
+      </button>
+    </div>
   );
 }
 
