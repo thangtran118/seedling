@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/access/current-user";
 import { Loading, PageHeader, Section } from "@/app/ui/kit";
-import { ConfirmLogout } from "@/app/ui/logout-button";
+import { ConfirmLogout } from "@/app/ui/confirm-logout";
 import { ThemeSwitcher } from "@/app/ui/theme";
 
 export const metadata: Metadata = { title: "Tài khoản · Seedling" };
