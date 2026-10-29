@@ -15,7 +15,6 @@ import {
   WEEKDAY_SHORT,
   weekdayIndex,
 } from "@/lib/domain";
-import { AccountMenu } from "@/app/ui/account-menu";
 import { AutoRefresh } from "@/app/ui/auto-refresh";
 import { Empty, Fab, FabStack, HeaderAction, Loading, Section, TextLink } from "@/app/ui/kit";
 import { firstParam } from "@/app/ui/load";
@@ -59,7 +58,6 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
   const next = todays.find((s) => sessionPhase(s.state, s.startsAt, now) === "upcoming");
   const mineCount = todaysAll.filter(mine).length + plannedAll.filter(mine).length;
   const allCount = todaysAll.length + plannedAll.length;
-  const isLeader = user.role === "area_leader";
 
   return (
     <>
@@ -69,8 +67,17 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
           <p className="text-sm capitalize text-muted">{formatDayLong(today)}</p>
           <h1 className="truncate text-2xl font-bold tracking-tight text-ink">Chào {user.name}</h1>
         </div>
-        <AccountMenu name={user.name} role={isLeader ? "Khu vực trưởng" : "Thánh đồ"} />
-        {/* md+: the phone's floating buttons and account menu are hidden; same spot and style as on /lich. */}
+        {/* Phones: theme, password and sign-out live on /tai-khoan; a worded button, not a bare avatar. */}
+        <Link
+          href="/tai-khoan"
+          className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface pl-1.5 pr-3.5 text-sm font-semibold text-ink active:bg-line/30 md:hidden"
+        >
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/15 text-accent">
+            {user.name.trim().split(/\s+/).pop()?.charAt(0).toUpperCase() ?? "?"}
+          </span>
+          Tài khoản
+        </Link>
+        {/* md+: the phone's floating buttons and account button are hidden; same spot and style as on /lich. */}
         <div className="hidden shrink-0 gap-2 md:flex">
           <HeaderAction href="/nguoi-nghe/moi" variant="secondary">
             + Thêm chiên

@@ -89,8 +89,10 @@ export function SideNav({ isLeader, name, areaRole }: { isLeader: boolean; name:
         ))}
       </ul>
       <div className="mt-auto flex flex-col gap-1 border-t border-line px-3 pt-4 text-sm">
-        <span className="font-semibold text-ink">{name}</span>
-        <span className="text-xs text-muted">{areaRole}</span>
+        <Link href="/tai-khoan" className="flex flex-col rounded-lg hover:text-accent">
+          <span className="font-semibold text-ink">{name}</span>
+          <span className="text-xs text-muted">{areaRole}</span>
+        </Link>
         <ThemeSwitcher className="mt-3 self-start" />
         <Link href="/doi-mat-khau" className="mt-2 text-muted hover:text-ink">
           Đổi mật khẩu

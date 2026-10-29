@@ -27,10 +27,10 @@ export function ChangePasswordForm({ forced, minLength }: { forced: boolean; min
       <PasswordField label="Nhập lại mật khẩu mới" name="confirm" autoComplete="new-password" required />
       <FormError message={state?.error} />
       <SubmitButton pending={pending}>Lưu mật khẩu</SubmitButton>
-      {/* Opened from the account menu: a way back without saving. */}
+      {/* Opened from the account page: a way back without saving. */}
       {!forced && (
         <Link
-          href="/"
+          href="/tai-khoan"
           className="flex h-11 items-center justify-center text-sm font-semibold text-muted hover:text-ink"
         >
           Hủy

@@ -33,7 +33,7 @@ function subscribe(fn: () => void) {
 const OPTIONS: { value: ThemePref; label: string; icon: string }[] = [
   {
     value: "system",
-    label: "Theo hệ thống",
+    label: "Tự động",
     icon: "M3 4.5h14v9H3zM7 16.5h6M10 13.5v3",
   },
   {
@@ -48,14 +48,15 @@ const OPTIONS: { value: ThemePref; label: string; icon: string }[] = [
   },
 ];
 
-// Segmented control: system / light / dark. Server render assumes "system"; the real choice shows after hydration.
-export function ThemeSwitcher({ className = "" }: { className?: string }) {
+// Segmented control: auto (follows the phone) / light / dark. Server render assumes "system"; the real choice
+// shows after hydration. `labeled`: full width with the words under each icon, for the account page.
+export function ThemeSwitcher({ className = "", labeled = false }: { className?: string; labeled?: boolean }) {
   const pref = useSyncExternalStore(subscribe, readPref, () => "system" as ThemePref);
   return (
     <div
       role="radiogroup"
       aria-label="Giao diện"
-      className={`inline-flex rounded-full border border-line bg-sunken p-0.5 ${className}`}
+      className={`${labeled ? "grid grid-cols-3 rounded-xl" : "inline-flex rounded-full"} border border-line bg-sunken p-0.5 ${className}`}
     >
       {OPTIONS.map((o) => {
         const on = pref === o.value;
@@ -65,16 +66,17 @@ export function ThemeSwitcher({ className = "" }: { className?: string }) {
             type="button"
             role="radio"
             aria-checked={on}
-            aria-label={o.label}
-            title={o.label}
+            aria-label={labeled ? undefined : o.label}
+            title={labeled ? undefined : o.label}
             onClick={() => setPref(o.value)}
-            className={`inline-flex h-8 w-9 items-center justify-center rounded-full transition-colors ${
-              on ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"
-            }`}
+            className={`inline-flex items-center justify-center transition-colors ${
+              labeled ? "h-14 flex-col gap-1 rounded-[10px] text-xs font-medium" : "h-8 w-9 rounded-full"
+            } ${on ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"}`}
           >
             <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden>
               <path d={o.icon} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
+            {labeled && o.label}
           </button>
         );
       })}
