@@ -65,7 +65,7 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-sm capitalize text-muted">{formatDayLong(today)}</p>
-          <h1 className="truncate text-2xl font-bold tracking-tight text-ink">Chào {user.name}</h1>
+          <h1 className="truncate text-2xl font-bold tracking-tight text-ink">CPN {user.name}</h1>
         </div>
         {/* md+: the phone's floating buttons are hidden; same spot and style as on /lich. */}
         <div className="hidden shrink-0 gap-2 md:flex">
