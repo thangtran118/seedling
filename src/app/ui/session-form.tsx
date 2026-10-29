@@ -131,7 +131,6 @@ export function SessionForm(props: SessionFormProps) {
                     <span className="font-medium text-ink">{l.name}</span>
                     <span className="text-xs text-muted">
                       {stageLabel(l.stage)}
-                      {l.linked ? " · của bạn" : ""}
                     </span>
                   </button>
                 );
