@@ -20,7 +20,7 @@ import {
   type SessionPhase,
 } from "@/lib/domain";
 import { AutoRefresh } from "@/app/ui/auto-refresh";
-import { ButtonLink, Empty, Loading, PageHeader, PhaseLegend, PhaseMark, Section } from "@/app/ui/kit";
+import { ButtonLink, Empty, HeaderAction, Loading, PageHeader, PhaseLegend, PhaseMark, Section } from "@/app/ui/kit";
 import { firstParam } from "@/app/ui/load";
 import { SessionCard } from "@/app/ui/session-card";
 
@@ -29,14 +29,7 @@ export const metadata: Metadata = { title: "Lịch khu vực · Seedling" };
 export default function CalendarPage(props: PageProps<"/lich">) {
   return (
     <>
-      <PageHeader
-        title="Lịch khu vực"
-        action={
-          <Link href="/ca/hen" className="rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-on-accent">
-            + Đặt lịch trudo
-          </Link>
-        }
-      />
+      <PageHeader title="Lịch khu vực" action={<HeaderAction href="/ca/hen">+ Đặt lịch trudo</HeaderAction>} />
       <Suspense fallback={<Loading />}>
         <Calendar searchParams={props.searchParams} />
       </Suspense>
@@ -88,7 +81,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
             <Link
               href={href(addMonths(month, -1), `${addMonths(month, -1)}-01`)}
               aria-label="Tháng trước"
-              className="rounded-full p-2 text-muted hover:bg-sunken"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-sunken hover:text-ink"
             >
               <Chevron dir="left" />
             </Link>
@@ -96,14 +89,14 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
             <Link
               href={href(addMonths(month, 1), `${addMonths(month, 1)}-01`)}
               aria-label="Tháng sau"
-              className="rounded-full p-2 text-muted hover:bg-sunken"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-sunken hover:text-ink"
             >
               <Chevron dir="right" />
             </Link>
             {!(month === today.slice(0, 7) && selected === today) && (
               <Link
                 href={href(today.slice(0, 7), today)}
-                className="ml-auto rounded-full border border-line px-3 py-1 text-sm text-ink hover:bg-sunken"
+                className="ml-auto inline-flex h-9 items-center rounded-full border border-line px-3 text-sm text-ink hover:bg-sunken"
               >
                 Hôm nay
               </Link>

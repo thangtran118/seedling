@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { MemberMonthRow, MonthStats, Overview, PersonalStats } from "@/lib/access/stats";
+import type { MemberMonthRow, Overview, PersonalStats } from "@/lib/access/stats";
 import { WEEKLY_SESSION_GOAL } from "@/lib/domain";
 import { Empty, StatTile } from "./kit";
 
@@ -7,34 +7,15 @@ import { Empty, StatTile } from "./kit";
 export const rate = (n: number, total: number) => (total ? Math.round((n / total) * 100) : null);
 export const pct = (r: number | null) => (r === null ? "—" : `${r}%`);
 
-// Home page: the four listener numbers for one month (total, new, heard the truth, báptem).
-export function StatsTiles({ m, size = "md" }: { m: MonthStats; size?: "sm" | "md" }) {
-  return (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
-      <StatTile size={size} label="Tổng số chiên" value={m.total} />
-      <StatTile size={size} label="Chiên mới tháng này" value={m.added} />
-      <StatTile
-        size={size}
-        label="Tỉ lệ nghe lẽ thật"
-        value={pct(rate(m.heard, m.total))}
-        sub={`${m.heard}/${m.total} chiên`}
-      />
-      <StatTile
-        size={size}
-        label="Tỉ lệ báptem"
-        value={pct(rate(m.baptized, m.total))}
-        sub={`${m.baptized}/${m.total} chiên`}
-      />
-    </div>
-  );
-}
-
 // Stats page: this week's sessions, then the listeners (new this month, shared the truth, báptem rate). The streak
 // tile shows only for one person.
 export function OverviewTiles({ st }: { st: Overview | PersonalStats }) {
   const streak = "streakWeeks" in st;
   return (
-    <div className={`grid grid-cols-2 gap-2 md:gap-3 ${streak ? "md:grid-cols-5" : "md:grid-cols-4"}`}>
+    // An odd last tile spans the row on phones instead of sitting alone in half of it.
+    <div
+      className={`grid grid-cols-2 gap-2 md:gap-3 [&>*:last-child:nth-child(odd)]:col-span-2 md:[&>*:last-child:nth-child(odd)]:col-span-1 ${streak ? "md:grid-cols-5" : "md:grid-cols-4"}`}
+    >
       <StatTile label="Buổi trudo tuần này" value={st.sessionsThisWeek} />
       {streak && (
         <StatTile
@@ -69,13 +50,13 @@ export function MemberMonthTable({
   return (
     <div className="overflow-x-auto rounded-2xl border border-line bg-surface">
       <table className="w-full text-sm">
-        <thead className="bg-sunken text-left text-xs text-muted">
+        <thead className="whitespace-nowrap bg-sunken text-left text-xs text-muted">
           <tr>
-            <th className="w-8 px-3 py-2 text-right font-semibold">#</th>
-            <th className="px-3 py-2 font-semibold">Thánh đồ</th>
-            <th className="px-3 py-2 text-right font-semibold">Báptem</th>
-            <th className="px-3 py-2 text-right font-semibold">Buổi trudo</th>
-            <th className="px-3 py-2 text-right font-semibold">Chiên mới</th>
+            <th className="hidden w-8 px-2.5 py-2 sm:px-3 text-right font-semibold sm:table-cell">#</th>
+            <th className="px-2.5 py-2 sm:px-3 font-semibold">Thánh đồ</th>
+            <th className="px-2.5 py-2 sm:px-3 text-right font-semibold">Báptem</th>
+            <th className="px-2.5 py-2 sm:px-3 text-right font-semibold">Buổi</th>
+            <th className="px-2.5 py-2 text-right font-semibold sm:px-3">Chiên mới</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-line tabular-nums">
@@ -83,19 +64,22 @@ export function MemberMonthTable({
             const name = `${r.name}${r.id === viewerId ? " (bạn)" : ""}`;
             return (
               <tr key={r.id} className={r.id === viewerId ? "bg-accent/5" : ""}>
-                <td className="px-3 py-2 text-right text-muted">{i + 1}</td>
-                <td className="max-w-40 truncate px-3 py-2 font-medium text-ink">
+                <td className="hidden px-2.5 py-2 sm:px-3 text-right text-muted sm:table-cell">{i + 1}</td>
+                <td className="max-w-36 truncate sm:max-w-60 px-2.5 py-2 sm:px-3 font-medium text-ink">
                   {linkRows ? (
-                    <Link href={`/thong-ke/thanh-vien/${r.id}`} className="hover:underline">
+                    <Link
+                      href={`/thong-ke/thanh-vien/${r.id}`}
+                      className="-my-2 inline-flex min-h-11 items-center text-accent hover:underline"
+                    >
                       {name}
                     </Link>
                   ) : (
                     name
                   )}
                 </td>
-                <td className="px-3 py-2 text-right font-semibold text-ink">{r.baptized}</td>
-                <td className="px-3 py-2 text-right text-ink">{r.sessions}</td>
-                <td className="px-3 py-2 text-right text-ink">{r.newListeners}</td>
+                <td className="px-2.5 py-2 sm:px-3 text-right font-semibold text-ink">{r.baptized}</td>
+                <td className="px-2.5 py-2 sm:px-3 text-right text-ink">{r.sessions}</td>
+                <td className="px-2.5 py-2 sm:px-3 text-right text-ink">{r.newListeners}</td>
               </tr>
             );
           })}

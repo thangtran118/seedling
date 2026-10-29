@@ -4,7 +4,7 @@ import { listListeners } from "@/lib/access/listeners";
 import { listAreaMembers } from "@/lib/access/members";
 import { floorToQuarterHour, toLocalInputValue } from "@/lib/domain";
 import { firstParam } from "./load";
-import { Empty } from "./kit";
+import { Empty, TextLink } from "./kit";
 import { SessionForm } from "./session-form";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -28,7 +28,7 @@ export async function SessionEntry({
   const selected = listeners.find((l) => l.id === preselect);
   if (listeners.length === 0) {
     return (
-      <Empty>
+      <Empty action={<TextLink href="/nguoi-nghe/moi">+ Thêm chiên</TextLink>}>
         Bạn chưa đồng hành với chiên nào nên chưa đặt lịch được. Người đồng hành hoặc khu vực trưởng có thể thêm bạn vào
         phần “Người đồng hành” của chiên đó.
       </Empty>

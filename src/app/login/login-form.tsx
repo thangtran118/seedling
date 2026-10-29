@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { loginAction } from "@/app/actions/auth";
 import { Field, FormError, SubmitButton } from "@/app/ui/form";
+import { PasswordField } from "@/app/ui/password-field";
 
 export function LoginForm() {
   const [state, action, pending] = useActionState(loginAction, undefined);
@@ -17,7 +18,7 @@ export function LoginForm() {
         defaultValue={state?.phone}
         required
       />
-      <Field label="Mật khẩu" name="password" type="password" autoComplete="current-password" required />
+      <PasswordField label="Mật khẩu" name="password" autoComplete="current-password" required />
       <FormError message={state?.error} />
       <SubmitButton pending={pending}>Đăng nhập</SubmitButton>
     </form>

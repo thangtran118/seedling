@@ -1,7 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, RedirectType } from "next/navigation";
 import * as z from "zod";
 import { requireUser } from "@/lib/access/current-user";
 import {
@@ -51,7 +51,7 @@ export async function planSessionAction(input: SessionPayload): Promise<SessionF
   if (!data) return BAD;
   const result = await guard(() => planSession(user, data));
   if (isActionError(result) || !result.ok) return result;
-  redirect(`/ca/${result.id}?da-luu=1`);
+  redirect(`/ca/${result.id}?da-luu=1`, RedirectType.replace); // the form page drops out of history: "back" skips it
 }
 
 export async function updateSessionAction(sessionId: string, input: SessionPayload): Promise<SessionFormResult> {
@@ -60,7 +60,7 @@ export async function updateSessionAction(sessionId: string, input: SessionPaylo
   if (!data || !id.safeParse(sessionId).success) return BAD;
   const result = await guard(() => updateSession(user, sessionId, data));
   if (result) return result;
-  redirect(`/ca/${sessionId}?da-luu=1`);
+  redirect(`/ca/${sessionId}?da-luu=1`, RedirectType.replace);
 }
 
 export type SimpleState = { error?: string } | undefined;

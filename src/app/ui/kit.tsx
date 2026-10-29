@@ -1,13 +1,17 @@
 // Server-safe presentational components shared by the app screens.
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { BackLink } from "./back-link";
 import { LESSONS, PHASE_LABEL, stageLabel, type SessionPhase, type Stage } from "@/lib/domain";
 
 export function PageHeader({ title, back, action }: { title: string; back?: string; action?: ReactNode }) {
   return (
     <header className="flex items-center gap-3 pb-2">
       {back && (
-        <Link href={back} aria-label="Quay lại" className="-ml-2 rounded-full p-2 text-muted hover:bg-line/40">
+        <BackLink
+          href={back}
+          className="-ml-2 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-line/40 hover:text-ink"
+        >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
             <path
               d="M12.5 4.5 7 10l5.5 5.5"
@@ -17,7 +21,7 @@ export function PageHeader({ title, back, action }: { title: string; back?: stri
               strokeLinejoin="round"
             />
           </svg>
-        </Link>
+        </BackLink>
       )}
       <h1 className="flex-1 truncate text-2xl font-bold tracking-tight text-ink">{title}</h1>
       {action}
@@ -48,9 +52,22 @@ export function Card({ children, href, className = "" }: { children: ReactNode; 
   );
 }
 
-export function Empty({ children }: { children: ReactNode }) {
+// action: the one next step out of the empty state (e.g. a link to add the first item).
+export function Empty({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <p className="rounded-2xl border border-dashed border-line px-3 py-4 text-center text-sm text-muted">{children}</p>
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line px-3 py-4 text-center text-sm text-muted">
+      <p>{children}</p>
+      {action}
+    </div>
+  );
+}
+
+// Small text action inside an empty state or a section header, sized for a thumb.
+export function TextLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link href={href} className="inline-flex min-h-11 items-center font-semibold text-accent hover:underline">
+      {children}
+    </Link>
   );
 }
 
@@ -118,6 +135,30 @@ export function ButtonLink({
   );
 }
 
+// The compact button in a page header ("+ Đặt lịch trudo", "Sửa").
+export function HeaderAction({
+  href,
+  children,
+  variant = "primary",
+}: {
+  href: string;
+  children: ReactNode;
+  variant?: "primary" | "secondary";
+}) {
+  const cls =
+    variant === "primary"
+      ? "bg-accent text-on-accent hover:opacity-90"
+      : "border border-line bg-surface text-accent hover:bg-sunken";
+  return (
+    <Link
+      href={href}
+      className={`inline-flex h-10 shrink-0 items-center rounded-xl px-3 text-sm font-semibold transition-colors ${cls}`}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export function Notice({ tone = "info", children }: { tone?: "info" | "warn" | "success"; children: ReactNode }) {
   const cls = {
     info: "bg-accent/10 text-ink",
@@ -127,9 +168,21 @@ export function Notice({ tone = "info", children }: { tone?: "info" | "warn" | "
   return <div className={`rounded-lg px-3 py-2 text-sm ${cls}`}>{children}</div>;
 }
 
+// Placeholder cards in the shape of the page to come, so the layout does not jump when data arrives.
 export function Loading() {
-  return <p className="py-6 text-center text-sm text-muted">Đang tải…</p>;
+  return (
+    <div role="status" className="flex flex-col gap-3 py-2">
+      <span className="sr-only">Đang tải…</span>
+      {[0, 1, 2].map((i) => (
+        <div key={i} aria-hidden className="h-20 rounded-2xl border border-line bg-surface motion-safe:animate-pulse" />
+      ))}
+    </div>
+  );
 }
+
+// Text inputs, selects and textareas share one look; 16px text keeps iOS from zooming in on focus.
+export const INPUT =
+  "rounded-lg border border-line bg-surface px-3 text-base text-ink placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25";
 
 // ---------- session phases ----------
 

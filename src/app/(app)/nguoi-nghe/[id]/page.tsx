@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import type { Metadata } from "next";
 import { removeLinkAction } from "@/app/actions/listeners";
 import { requireUser } from "@/lib/access/current-user";
@@ -7,7 +6,18 @@ import { getListenerDetail, type ListenerDetail } from "@/lib/access/listeners";
 import { listAreaMembers } from "@/lib/access/members";
 import { formatDate, formatDateTime, sessionPhase } from "@/lib/domain";
 import { ActionForm, PendingButton } from "@/app/ui/action-form";
-import { ButtonLink, Card, Empty, Loading, PageHeader, PHASE_TONE, PhaseBadge, Section } from "@/app/ui/kit";
+import { ContactList } from "@/app/ui/contact";
+import {
+  ButtonLink,
+  Card,
+  Empty,
+  HeaderAction,
+  Loading,
+  PageHeader,
+  PHASE_TONE,
+  PhaseBadge,
+  Section,
+} from "@/app/ui/kit";
 import { CompanionPicker, ListenerEditor, ListenerMainCard } from "@/app/ui/listener-editor";
 import { loadOr404 } from "@/app/ui/load";
 
@@ -20,14 +30,6 @@ export default function ListenerPage(props: PageProps<"/nguoi-nghe/[id]">) {
     </Suspense>
   );
 }
-
-const PRIVATE_LABELS = [
-  ["phone", "Số điện thoại"],
-  ["hometown", "Quê quán"],
-  ["facebook", "Facebook"],
-  ["zalo", "Zalo"],
-  ["telegram", "Telegram"],
-] as const;
 
 async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["params"] }) {
   const { id } = await params;
@@ -46,9 +48,9 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
         back="/nguoi-nghe"
         action={
           l.canEdit ? (
-            <Link href={`/nguoi-nghe/${l.id}/sua`} className="text-sm text-accent underline">
-              Sửa
-            </Link>
+            <HeaderAction href={`/nguoi-nghe/${l.id}/sua`} variant="secondary">
+              Sửa thông tin
+            </HeaderAction>
           ) : undefined
         }
       />
@@ -60,22 +62,7 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
       {l.private && (
         <Section title="Thông tin riêng tư">
           <Card>
-            <dl className="flex flex-col gap-2 text-sm">
-              {PRIVATE_LABELS.map(([key, label]) => (
-                <div key={key} className="flex justify-between gap-3">
-                  <dt className="text-muted">{label}</dt>
-                  <dd className="break-all text-right text-ink">
-                    {key === "phone" && l.private?.phone ? (
-                      <a href={`tel:${l.private.phone}`} className="text-accent underline">
-                        {l.private.phone}
-                      </a>
-                    ) : (
-                      (l.private?.[key] ?? "—")
-                    )}
-                  </dd>
-                </div>
-              ))}
-            </dl>
+            <ContactList p={l.private} />
           </Card>
         </Section>
       )}
@@ -85,7 +72,7 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
           {l.links.map((link) => (
             <li
               key={link.userId}
-              className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2"
+              className="flex min-h-12 items-center justify-between rounded-lg border border-line bg-surface px-3 py-1.5"
             >
               <span className="text-ink">
                 {link.userId === user.id ? `${link.name} (bạn)` : link.name}
@@ -97,7 +84,9 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
                   hidden={{ listenerId: l.id, userId: link.userId }}
                   confirm={`Bỏ ${link.name} khỏi người đồng hành?`}
                 >
-                  <PendingButton className="text-sm text-danger">Bỏ</PendingButton>
+                  <PendingButton className="h-9 rounded-lg px-3 text-sm text-danger hover:bg-danger/10">
+                    Bỏ
+                  </PendingButton>
                 </ActionForm>
               )}
             </li>

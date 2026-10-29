@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
   createMemberAction,
   removeMemberAction,
@@ -9,6 +9,7 @@ import {
   type MemberState,
 } from "@/app/actions/members";
 import type { MemberAdminView } from "@/lib/access/members";
+import { INPUT } from "./kit";
 
 function Credentials({ state }: { state: MemberState }) {
   if (!state?.credentials) return null;
@@ -20,7 +21,27 @@ function Credentials({ state }: { state: MemberState }) {
         <b className="font-mono text-base tracking-wider">{tempPassword}</b>
       </p>
       <p className="mt-1 text-xs text-muted">Mật khẩu chỉ hiện một lần, hết hạn sau 72 giờ.</p>
+      <CopyButton text={`Seedling\nSĐT: ${phone}\nMật khẩu tạm: ${tempPassword}`} />
     </div>
+  );
+}
+
+// Copies the login message so it can be pasted into Zalo / Telegram as is.
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        navigator.clipboard?.writeText(text).then(
+          () => setCopied(true),
+          () => {},
+        )
+      }
+      className="mt-2 h-10 rounded-lg border border-line bg-surface px-3 text-sm font-semibold text-accent hover:bg-sunken"
+    >
+      {copied ? "Đã sao chép ✓" : "Sao chép để gửi"}
+    </button>
   );
 }
 
@@ -38,17 +59,17 @@ export function CreateMemberForm() {
   const [state, action, pending] = useActionState(createMemberAction, undefined);
   return (
     <form action={action} className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3">
-      <div className="grid grid-cols-2 gap-2">
-        <input name="name" placeholder="Tên" required className="h-11 rounded-lg border border-line bg-surface px-3" />
-        <input
-          name="phone"
-          placeholder="Số điện thoại"
-          type="tel"
-          required
-          className="h-11 rounded-lg border border-line bg-surface px-3"
-        />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold text-ink">Tên</span>
+          <input name="name" required autoComplete="off" className={`${INPUT} h-11`} />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold text-ink">Số điện thoại</span>
+          <input name="phone" type="tel" inputMode="tel" required autoComplete="off" className={`${INPUT} h-11`} />
+        </label>
       </div>
-      <button disabled={pending} className="h-11 rounded-lg bg-accent font-semibold text-on-accent disabled:opacity-60">
+      <button disabled={pending} className="h-12 rounded-xl bg-accent font-semibold text-on-accent disabled:opacity-60">
         {pending ? "Đang tạo…" : "Tạo tài khoản"}
       </button>
       <StateLine state={state} />
@@ -56,7 +77,8 @@ export function CreateMemberForm() {
   );
 }
 
-const small = "h-9 rounded-lg border border-line px-3 text-sm text-ink disabled:opacity-50";
+const small =
+  "h-10 rounded-lg border border-line px-3 text-sm text-ink transition-colors hover:bg-sunken disabled:opacity-50";
 
 export function MemberRow({ member, isSelf }: { member: MemberAdminView; isSelf: boolean }) {
   const [resetState, resetAction, resetting] = useActionState(resetPasswordAction, undefined);
@@ -78,19 +100,40 @@ export function MemberRow({ member, isSelf }: { member: MemberAdminView; isSelf:
   return (
     <li className="rounded-xl border border-line bg-surface p-3">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="font-semibold text-ink">{member.name}</span>
-        <span className="text-sm text-muted">{member.phone}</span>
+        <span className={`font-semibold ${member.active ? "text-ink" : "text-muted line-through"}`}>{member.name}</span>
+        <a href={`tel:${member.phone}`} className="text-sm text-muted tabular-nums hover:text-accent">
+          {member.phone}
+        </a>
       </div>
-      {badges.length > 0 && <p className="mt-1 text-xs text-muted">{badges.join(" · ")}</p>}
+      {badges.length > 0 && (
+        <ul className="mt-1.5 flex flex-wrap gap-1.5">
+          {badges.map((b) => (
+            <li key={String(b)} className="rounded-full bg-sunken px-2 py-0.5 text-xs font-medium text-muted">
+              {b}
+            </li>
+          ))}
+        </ul>
+      )}
       {member.active && !isSelf && (
         <div className="mt-2 flex flex-wrap gap-2">
-          <form action={resetAction}>
+          <form
+            action={resetAction}
+            onSubmit={(e) => {
+              if (!window.confirm(`Cấp mật khẩu tạm mới cho ${member.name}? Mật khẩu cũ sẽ không dùng được nữa.`))
+                e.preventDefault();
+            }}
+          >
             {hidden}
             <button disabled={resetting} className={small}>
               Cấp lại mật khẩu
             </button>
           </form>
-          <form action={lockAction}>
+          <form
+            action={lockAction}
+            onSubmit={(e) => {
+              if (!member.locked && !window.confirm(`Khóa tài khoản của ${member.name}?`)) e.preventDefault();
+            }}
+          >
             {hidden}
             <input type="hidden" name="locked" value={member.locked ? "false" : "true"} />
             <button disabled={locking} className={small}>
@@ -104,7 +147,7 @@ export function MemberRow({ member, isSelf }: { member: MemberAdminView; isSelf:
             }}
           >
             {hidden}
-            <button disabled={removing} className={`${small} text-danger`}>
+            <button disabled={removing} className={`${small} border-danger/40 text-danger hover:bg-danger/10`}>
               Xóa
             </button>
           </form>

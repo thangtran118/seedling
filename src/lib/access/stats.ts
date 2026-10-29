@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { listenerLinks, listenerPrivate, listeners, sessionMembers, sessions, users } from "@/db/schema";
-import { addDays, addMonths, dayKey, dayStart, sundayWeekStart, WEEKLY_SESSION_GOAL } from "@/lib/domain";
+import { addDays, dayKey, dayStart, sundayWeekStart, WEEKLY_SESSION_GOAL } from "@/lib/domain";
 import type { SessionUser } from "./auth";
 import { forbiddenError, notFoundError } from "./errors";
 import { listListenersLinkedTo, type ListenerSummary } from "./listeners";
@@ -13,14 +13,6 @@ import { completedAt } from "./phase";
 // month with at least one way to reach them (phone, Facebook, Zalo or Telegram).
 
 // Listener numbers at the end of one month (Vietnam calendar). The current month counts up to now.
-export type MonthStats = {
-  month: string; // "YYYY-MM"
-  total: number; // listeners added by the end of the month
-  added: number; // listeners added during the month
-  heard: number; // of `total`, those who had reached mảnh 1 by the end of the month
-  baptized: number; // of `total`, those marked báptem by the end of the month
-};
-
 // The stats page numbers, for one person or the whole area.
 export type Overview = {
   sessionsThisWeek: number;
@@ -51,7 +43,6 @@ export type MemberMonthRow = {
 
 export type AreaStats = {
   overview: Overview;
-  current: MonthStats; // this month's listener numbers (home page)
 };
 
 type Milestones = { createdAt: Date; firstLessonAt: Date | null; baptizedAt: Date | null };
@@ -59,20 +50,6 @@ type ListenerRow = Milestones & { lessonsReached: number; manualStatus: string; 
 
 const monthKey = (d: Date) => dayKey(d).slice(0, 7);
 const monthFrom = (now: Date) => dayStart(`${monthKey(now)}-01`);
-
-function monthStats(rows: Milestones[], month: string): MonthStats {
-  const from = dayStart(`${month}-01`).getTime();
-  const to = dayStart(`${addMonths(month, 1)}-01`).getTime();
-  const by = (d: Date | null) => d !== null && d.getTime() < to;
-  const counted = rows.filter((r) => by(r.createdAt));
-  return {
-    month,
-    total: counted.length,
-    added: counted.filter((r) => r.createdAt.getTime() >= from).length,
-    heard: counted.filter((r) => by(r.firstLessonAt)).length,
-    baptized: counted.filter((r) => by(r.baptizedAt)).length,
-  };
-}
 
 function listenerNumbers(rows: ListenerRow[], now: Date) {
   const from = monthFrom(now).getTime();
@@ -149,11 +126,6 @@ async function personalStats(userId: string, areaId: string, now: Date): Promise
 // Everyone's own numbers (the stats page).
 export function myStats(viewer: SessionUser, now = new Date()): Promise<PersonalStats> {
   return personalStats(viewer.id, viewer.areaId, now);
-}
-
-// This month's listener numbers for the listeners the viewer walks with (home page).
-export async function myMonthStats(viewer: SessionUser, now = new Date()): Promise<MonthStats> {
-  return monthStats(await linkedListeners([viewer.id], viewer.areaId), monthKey(now));
 }
 
 // Leader: one member of the area, with the listeners they walk with.
@@ -237,6 +209,5 @@ export async function areaStats(viewer: SessionUser, now = new Date()): Promise<
       ).sessionsThisWeek,
       ...listenerNumbers(rows, now),
     },
-    current: monthStats(rows, monthKey(now)),
   };
 }
