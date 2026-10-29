@@ -63,6 +63,8 @@ export function SessionForm(props: SessionFormProps) {
   const [mapUrl, setMapUrl] = useState(initial.mapUrl);
   const [summary, setSummary] = useState(initial.summary);
   const [showSummary, setShowSummary] = useState(Boolean(initial.summary));
+  // Planning a visit: the planner may take the sharing on right away (only for themselves, never for someone else).
+  const [iShare, setIShare] = useState(false);
   // Missing required fields, shown only after a submit attempt so an empty form does not open in red.
   const [tried, setTried] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +100,7 @@ export function SessionForm(props: SessionFormProps) {
         locationLabel,
         mapUrl,
         summary,
+        iShare: mode === "plan" && !outreach && iShare,
         confirmDistinct,
       });
       // A successful submit redirects; anything returned is a problem to show.
@@ -286,6 +289,21 @@ export function SessionForm(props: SessionFormProps) {
             </label>
           ))}
       </fieldset>
+
+      {/* 4. AE chia sẻ chính */}
+      {mode === "plan" && !outreach && (
+        <label className="flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border border-line bg-surface px-3 py-2">
+          <input
+            type="checkbox"
+            checked={iShare}
+            onChange={(e) => setIShare(e.target.checked)}
+            className="h-5 w-5 shrink-0 accent-accent"
+          />
+          <span className="flex flex-col">
+            <span className="text-base font-semibold text-ink">Tôi chia sẻ chính</span>
+          </span>
+        </label>
+      )}
 
       {duplicates && (
         <div role="alert" className="flex flex-col gap-2 rounded-lg bg-amber-500/15 p-3 text-sm text-ink">

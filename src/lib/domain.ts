@@ -172,6 +172,19 @@ export function sessionPhase(state: SessionState, startsAt: Date | string, now =
 // Upcoming or in progress: people can still join, leave, edit or cancel it.
 export const isOpenPhase = (phase: SessionPhase) => phase === "upcoming" || phase === "live";
 
+// A visit session today, still open, that nobody has taken the sharing on: shown in red until someone does.
+export function needsSharer(
+  s: { kind: SessionKind; state: SessionState; startsAt: Date | string; sharer: unknown },
+  now = new Date(),
+) {
+  return (
+    s.kind === "visit" &&
+    !s.sharer &&
+    isOpenPhase(sessionPhase(s.state, s.startsAt, now)) &&
+    dayKey(s.startsAt) === dayKey(now)
+  );
+}
+
 export const PHASE_LABEL: Record<SessionPhase, string> = {
   upcoming: "Chưa bắt đầu",
   live: "Đang diễn ra",

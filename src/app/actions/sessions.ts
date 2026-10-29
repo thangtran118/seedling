@@ -6,9 +6,11 @@ import * as z from "zod";
 import { requireUser } from "@/lib/access/current-user";
 import {
   cancelSession,
+  giveUpSharing,
   joinSession,
   leaveSession,
   planSession,
+  takeSharing,
   updateSession,
   type DuplicateInfo,
 } from "@/lib/access/sessions";
@@ -29,6 +31,7 @@ const payloadSchema = z.object({
   locationLabel: text,
   mapUrl: text,
   summary: text,
+  iShare: z.boolean().optional(),
   confirmDistinct: z.boolean().optional(),
 });
 
@@ -93,4 +96,12 @@ export async function leaveSessionAction(_prev: SimpleState, formData: FormData)
 
 export async function cancelSessionAction(_prev: SimpleState, formData: FormData): Promise<SimpleState> {
   return simple(formData, cancelSession);
+}
+
+export async function takeSharingAction(_prev: SimpleState, formData: FormData): Promise<SimpleState> {
+  return simple(formData, takeSharing);
+}
+
+export async function giveUpSharingAction(_prev: SimpleState, formData: FormData): Promise<SimpleState> {
+  return simple(formData, giveUpSharing);
 }

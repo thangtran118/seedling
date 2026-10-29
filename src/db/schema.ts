@@ -132,6 +132,9 @@ export const sessions = pgTable("sessions", {
   mapUrl: varchar("map_url", { length: 500 }),
   state: sessionStateEnum("state").notNull(),
   cancelledBy: integer("cancelled_by").references(() => users.id),
+  // AE chia sẻ chính: one member of a visit session who takes it on themselves (nobody assigns it to someone else).
+  // Null until someone does; cleared when that member leaves the session.
+  sharerId: integer("sharer_id").references(() => users.id),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   createdAt: createdAt(),
 });

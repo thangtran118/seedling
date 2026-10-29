@@ -1,11 +1,17 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { cancelSessionAction, joinSessionAction, leaveSessionAction } from "@/app/actions/sessions";
+import {
+  cancelSessionAction,
+  giveUpSharingAction,
+  joinSessionAction,
+  leaveSessionAction,
+  takeSharingAction,
+} from "@/app/actions/sessions";
 import { requireUser } from "@/lib/access/current-user";
 import { listenersForSession, type SessionListener } from "@/lib/access/listeners";
-import { getSessionDetail } from "@/lib/access/sessions";
-import { dayKey, formatDayLong, formatTime, isClosedStage, isOpenPhase, sessionPhase } from "@/lib/domain";
+import { getSessionDetail, type SessionDetail } from "@/lib/access/sessions";
+import { dayKey, formatDayLong, formatTime, isClosedStage, isOpenPhase, needsSharer, sessionPhase } from "@/lib/domain";
 import { ActionForm, PendingButton } from "@/app/ui/action-form";
 import { ContactList } from "@/app/ui/contact";
 import {
@@ -72,7 +78,7 @@ async function Detail({
       {phase === "cancelled" && <Notice tone="warn">Ca này đã bị hủy. Dữ liệu vẫn được lưu trong lịch sử.</Notice>}
       {phase === "done" && (
         <Notice tone="success">
-          {outreach ? "Ca đã hoàn thành." : "Ca đã hoàn thành và được lưu vào lịch sử của chiên."}
+          Ca đã hoàn thành.
         </Notice>
       )}
 
@@ -91,6 +97,8 @@ async function Detail({
           </PendingButton>
         </ActionForm>
       )}
+
+      {!outreach && <Sharer s={s} open={isOpenPhase(phase)} />}
 
       {outreach ? (
         <OutreachNote showAdd={s.isMember && phase !== "upcoming" && phase !== "cancelled"} />
@@ -147,6 +155,7 @@ async function Detail({
           {s.members.map((m) => (
             <span key={m.id} className="rounded-full bg-sunken px-2.5 py-1 text-sm text-ink">
               {m.id === user.id ? `${m.name} (bạn)` : m.name}
+              {m.id === s.sharer?.id && <span className="text-muted"> · chia sẻ chính</span>}
             </span>
           ))}
         </div>
@@ -191,6 +200,44 @@ async function Detail({
           ),
       )}
     </>
+  );
+}
+
+// AE chia sẻ chính: each member takes it on themselves (never someone else); red while a session today has nobody.
+function Sharer({ s, open }: { s: SessionDetail; open: boolean }) {
+  const alert = needsSharer(s);
+  return (
+    <div
+      className={`flex flex-col gap-3 rounded-2xl border p-4 ${alert ? "border-danger/60 bg-danger/5" : "border-line bg-surface"}`}
+    >
+      <div>
+        <p className={`text-sm ${alert ? "text-danger" : "text-muted"}`}>AE chia sẻ chính</p>
+        {s.sharer ? (
+          <p className="text-lg font-bold text-ink">{s.isSharer ? `${s.sharer.name} (bạn)` : s.sharer.name}</p>
+        ) : (
+          <p className={`text-lg font-bold ${alert ? "text-danger" : "text-muted"}`}>
+            {alert ? "Ca hôm nay chưa có ae chia sẻ chính" : "Chưa có ae np"}
+          </p>
+        )}
+        {open && !s.sharer && !s.isMember && (
+          <p className="mt-1 text-sm text-muted">Tham gia ca để nhận chia sẻ chính.</p>
+        )}
+      </div>
+      {s.canShare && (
+        <ActionForm action={takeSharingAction} hidden={{ sessionId: s.id }}>
+          <PendingButton className="h-12 w-full rounded-xl bg-accent font-semibold text-on-accent">
+            Tôi chia sẻ chính
+          </PendingButton>
+        </ActionForm>
+      )}
+      {open && s.isSharer && (
+        <ActionForm action={giveUpSharingAction} hidden={{ sessionId: s.id }} confirm="Bỏ chia sẻ chính ca này?">
+          <PendingButton className="h-11 w-full rounded-xl border border-line bg-surface text-ink hover:bg-sunken">
+            Bỏ chia sẻ chính
+          </PendingButton>
+        </ActionForm>
+      )}
+    </div>
   );
 }
 

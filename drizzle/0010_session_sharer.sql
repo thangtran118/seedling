@@ -1,0 +1,2 @@
+ALTER TABLE "sessions" ADD COLUMN "sharer_id" integer;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_sharer_id_users_id_fk" FOREIGN KEY ("sharer_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;

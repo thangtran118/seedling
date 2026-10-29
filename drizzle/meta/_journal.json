@@ -71,6 +71,13 @@
       "when": 1793258093429,
       "tag": "0009_integer_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793261570488,
+      "tag": "0010_session_sharer",
+      "breakpoints": true
     }
   ]
 }

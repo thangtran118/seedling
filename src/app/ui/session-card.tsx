@@ -8,6 +8,7 @@ import {
   isOpenPhase,
   lessonCode,
   lessonName,
+  needsSharer,
   PHASE_LABEL,
   sessionPhase,
   WEEKDAY_SHORT,
@@ -18,11 +19,22 @@ import { KindIcon, PHASE_TONE, PhaseBadge } from "./kit";
 
 const names = (xs: { name: string }[]) => xs.map((x) => x.name).join(", ");
 
-// One "Label: value" line under the listener names; a muted value stands for "nothing yet".
-function Row({ label, children, empty = false }: { label: string; children: ReactNode; empty?: boolean }) {
+// One "Label: value" line under the listener names; a muted value stands for "nothing yet", a red one for "needed".
+function Row({
+  label,
+  children,
+  empty = false,
+  alert = false,
+}: {
+  label: string;
+  children: ReactNode;
+  empty?: boolean;
+  alert?: boolean;
+}) {
+  const value = alert ? "font-semibold text-danger" : empty ? "" : "font-medium text-ink";
   return (
-    <p className="mt-0.5 text-sm text-muted">
-      {label}: <span className={empty ? "" : "font-medium text-ink"}>{children}</span>
+    <p className={`mt-0.5 text-sm ${alert ? "text-danger" : "text-muted"}`}>
+      {label}: <span className={value}>{children}</span>
     </p>
   );
 }
@@ -69,6 +81,7 @@ function ListenerNames({ listeners }: { listeners: SessionListItem["listeners"] 
 
 // One session as a row: time on the left, a stripe in the phase color, people on the right. The same card on every
 // page. The phase shows only as the stripe's color, except a cancelled session: a grey card with a "Đã hủy" badge.
+// A visit today with no AE chia sẻ chính yet gets a red border and a red line until someone takes it.
 // While the viewer can still join, a "Tham gia" button floats in the top-right corner instead of taking a row of its
 // own; it is as tall as the first line, with a larger invisible tap area.
 export function SessionCard({
@@ -87,9 +100,12 @@ export function SessionCard({
   const key = dayKey(s.startsAt);
   const canJoin = s.canJoin && isOpenPhase(phase);
   const cancelled = phase === "cancelled";
+  const alert = needsSharer(s, now);
   return (
     <div
-      className={`relative rounded-2xl border border-line transition-colors hover:border-muted/50 ${cancelled ? "bg-sunken" : "bg-surface"}`}
+      className={`relative rounded-2xl border transition-colors ${
+        alert ? "border-danger/60 hover:border-danger" : "border-line hover:border-muted/50"
+      } ${cancelled ? "bg-sunken" : "bg-surface"}`}
     >
       <Link href={`/ca/${s.id}`} className="flex gap-3 rounded-2xl p-3 active:bg-line/30">
         <div className="flex w-12 shrink-0 flex-col items-center justify-center text-center">
@@ -127,10 +143,9 @@ export function SessionCard({
             <Row label="AE tham gia" empty={s.members.length === 0}>
               {s.members.length ? names(s.members) : "Chưa có ai"}
             </Row>
-            {/* Picking who shares is not built yet: the line is shown so the card already has its final shape. */}
             {s.kind === "visit" && (
-              <Row label="AE chia sẻ chính" empty>
-                Chưa chọn
+              <Row label="AE chia sẻ chính" empty={!s.sharer} alert={alert}>
+                {s.sharer?.name ?? "Chưa có ae np"}
               </Row>
             )}
             <Row label="Địa điểm" empty={!s.locationLabel}>

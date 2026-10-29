@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   listenerLinks,
@@ -40,8 +40,11 @@ export type SessionListItem = {
   // owners: the listener's người đồng hành, so the session list shows whose chiên it is.
   listeners: { id: number; name: string; owners: string[]; nextLesson?: { route: Route; n: number } | null }[];
   members: { id: number; name: string }[];
+  sharer: { id: number; name: string } | null; // AE chia sẻ chính (visit sessions only), one of the members
   isMember: boolean;
+  isSharer: boolean;
   canJoin: boolean; // upcoming or in progress, and the viewer is not in it yet (no member cap)
+  canShare: boolean; // visit session, upcoming or in progress, the viewer is in it, and nobody has taken the sharing
 };
 
 export type SessionDetail = SessionListItem & {
@@ -176,6 +179,11 @@ async function writeComposition(tx: Tx, sessionId: number, c: CompositionInput) 
     await tx.insert(sessionListeners).values(c.listenerIds.map((listenerId) => ({ sessionId, listenerId })));
   }
   await tx.insert(sessionMembers).values(c.memberIds.map((userId) => ({ sessionId, userId })));
+  // The sharer is always a member: someone taken off the session stops being its sharer.
+  await tx
+    .update(sessions)
+    .set({ sharerId: null })
+    .where(and(eq(sessions.id, sessionId), notInArray(sessions.sharerId, c.memberIds)));
 }
 
 async function writePrivate(tx: Tx, sessionId: number, p: { summary: string | null }) {
@@ -245,10 +253,11 @@ async function requireEditable(viewer: SessionUser, sessionId: number) {
 
 // "Đặt lịch trudo": a session with the planner as first member; others join from the area calendar. It completes
 // on its own 2 hours after it starts unless cancelled. Only users linked to every listener in it may plan (the area
-// leader has no special right). An outreach session has no listener, so anyone in the area may plan one.
+// leader has no special right). An outreach session has no listener, so anyone in the area may plan one. The planner
+// may take the sharing on (iShare) when planning a visit, as they could right after on the session page.
 export async function planSession(
   viewer: SessionUser,
-  input: { kind: SessionKind; listenerIds: number[] } & DetailsInput & { confirmDistinct?: boolean },
+  input: { kind: SessionKind; listenerIds: number[] } & DetailsInput & { iShare?: boolean; confirmDistinct?: boolean },
 ): Promise<WriteResult> {
   const details = validateDetails(input);
   if (!details.locationLabel) throw invalidError("Cần nhập nơi gặp để người khác biết mà tham gia.");
@@ -269,6 +278,7 @@ export async function planSession(
         locationLabel: details.locationLabel,
         mapUrl: details.mapUrl,
         state: "planned",
+        sharerId: input.kind === "visit" && input.iShare ? viewer.id : null,
       })
       .returning({ id: sessions.id });
     await writeComposition(tx, row.id, c);
@@ -296,9 +306,44 @@ export async function leaveSession(viewer: SessionUser, sessionId: number) {
   const members = await sessionMemberIds(sessionId);
   if (!members.includes(viewer.id)) return;
   if (members.length <= 1) throw invalidError("Bạn là người duy nhất trong ca. Hãy hủy ca thay vì rời.");
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(sessionMembers)
+      .where(and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.userId, viewer.id)));
+    await tx
+      .update(sessions)
+      .set({ sharerId: null })
+      .where(and(eq(sessions.id, sessionId), eq(sessions.sharerId, viewer.id)));
+  });
+}
+
+// AE chia sẻ chính: a member of an open visit session takes it on themselves, if nobody has yet. To hand it over, the
+// current sharer gives it up first; nobody can put someone else down for it.
+export async function takeSharing(viewer: SessionUser, sessionId: number) {
+  await db.transaction(async (tx) => {
+    const [row] = await tx.select().from(sessions).where(eq(sessions.id, sessionId)).for("update");
+    if (!row || row.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy ca.");
+    if (row.kind !== "visit") throw invalidError("Ca đi tiếp xúc không có người chia sẻ chính.");
+    if (!isOpen(row)) throw invalidError("Chỉ nhận chia sẻ được ở ca chưa bắt đầu hoặc đang diễn ra.");
+    if (row.sharerId === viewer.id) return;
+    if (row.sharerId !== null) throw invalidError("Ca này đã có người chia sẻ chính.");
+    const [member] = await tx
+      .select()
+      .from(sessionMembers)
+      .where(and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.userId, viewer.id)));
+    if (!member) throw forbiddenError("Hãy tham gia ca trước khi nhận chia sẻ chính.");
+    await tx.update(sessions).set({ sharerId: viewer.id }).where(eq(sessions.id, sessionId));
+  });
+}
+
+export async function giveUpSharing(viewer: SessionUser, sessionId: number) {
+  const row = await loadSession(viewer, sessionId);
+  if (row.sharerId !== viewer.id) return;
+  if (!isOpen(row)) throw invalidError("Ca đã hoàn thành, không đổi người chia sẻ được nữa.");
   await db
-    .delete(sessionMembers)
-    .where(and(eq(sessionMembers.sessionId, sessionId), eq(sessionMembers.userId, viewer.id)));
+    .update(sessions)
+    .set({ sharerId: null })
+    .where(and(eq(sessions.id, sessionId), eq(sessions.sharerId, viewer.id)));
 }
 
 // Edit date, place and people while the session is still open.
@@ -372,6 +417,7 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
   return rows.map((r) => {
     const members = ms.filter((m) => m.sessionId === r.id).map(({ id, name }) => ({ id, name }));
     const isMember = members.some((m) => m.id === viewer.id);
+    const sharer = r.kind === "visit" ? (members.find((m) => m.id === r.sharerId) ?? null) : null;
     return {
       id: r.id,
       kind: r.kind,
@@ -387,8 +433,11 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
             : { id, name, owners: ownersOf(id) },
         ),
       members,
+      sharer,
       isMember,
+      isSharer: sharer?.id === viewer.id,
       canJoin: openIds.has(r.id) && !isMember,
+      canShare: r.kind === "visit" && openIds.has(r.id) && isMember && !sharer,
     };
   });
 }
