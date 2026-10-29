@@ -67,17 +67,7 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
           <p className="text-sm capitalize text-muted">{formatDayLong(today)}</p>
           <h1 className="truncate text-2xl font-bold tracking-tight text-ink">Chào {user.name}</h1>
         </div>
-        {/* Phones: theme, password and sign-out live on /tai-khoan; a worded button, not a bare avatar. */}
-        <Link
-          href="/tai-khoan"
-          className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface pl-1.5 pr-3.5 text-sm font-semibold text-ink active:bg-line/30 md:hidden"
-        >
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/15 text-accent">
-            {user.name.trim().split(/\s+/).pop()?.charAt(0).toUpperCase() ?? "?"}
-          </span>
-          Tài khoản
-        </Link>
-        {/* md+: the phone's floating buttons and account button are hidden; same spot and style as on /lich. */}
+        {/* md+: the phone's floating buttons are hidden; same spot and style as on /lich. */}
         <div className="hidden shrink-0 gap-2 md:flex">
           <HeaderAction href="/nguoi-nghe/moi" variant="secondary">
             + Thêm chiên

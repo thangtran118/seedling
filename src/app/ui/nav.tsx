@@ -14,6 +14,8 @@ const ICONS: Record<string, string> = {
   calendar: "M4 5h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm-1 4h14M7 3v4m6-4v4",
   chart: "M3 17h14M5.5 14V9m4.5 5V5m4.5 9v-3",
   team: "M10 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-6 9c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5",
+  account:
+    "M10 10.5a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5Zm-5 5.2c1.1-1.8 2.9-2.7 5-2.7s3.9.9 5 2.7M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z",
 };
 
 function Icon({ name }: { name: string }) {
@@ -24,25 +26,29 @@ function Icon({ name }: { name: string }) {
   );
 }
 
-function useItems(isLeader: boolean) {
+const MAIN: Item[] = [
+  { href: "/", label: "Hôm nay", icon: "home" },
+  { href: "/lich", label: "Lịch", icon: "calendar" },
+  { href: "/nguoi-nghe", label: "Chiên", icon: "people" },
+  { href: "/thong-ke", label: "Thống kê", icon: "chart" },
+];
+
+function useActive() {
   const pathname = usePathname();
-  const items: Item[] = [
-    { href: "/", label: "Hôm nay", icon: "home" },
-    { href: "/lich", label: "Lịch", icon: "calendar" },
-    { href: "/nguoi-nghe", label: "Chiên", icon: "people" },
-    { href: "/thong-ke", label: "Thống kê", icon: "chart" },
-    ...(isLeader ? [{ href: "/thanh-vien", label: "Thành viên", icon: "team" }] : []),
-  ];
-  const active = (item: Item) =>
+  return (item: Item) =>
     item.href === "/"
       ? pathname === "/"
       : [item.href, ...(item.also ?? [])].some((p) => pathname === p || pathname.startsWith(`${p}/`));
-  return { items, active };
 }
 
-// Phones: bottom tab bar. Tablets and desktops (md+): a left rail, see SideNav.
+// Phones: bottom tab bar, five tabs at most so labels fit at 320px. Account is the last tab; the leader's
+// Thành viên screen is reached from it (and stays lit while there). Tablets and desktops (md+): see SideNav.
 export function BottomNav({ isLeader }: { isLeader: boolean }) {
-  const { items, active } = useItems(isLeader);
+  const active = useActive();
+  const items: Item[] = [
+    ...MAIN,
+    { href: "/tai-khoan", label: "Tài khoản", icon: "account", also: isLeader ? ["/thanh-vien"] : [] },
+  ];
   return (
     <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
       <ul className="mx-auto flex max-w-md">
@@ -64,7 +70,8 @@ export function BottomNav({ isLeader }: { isLeader: boolean }) {
 }
 
 export function SideNav({ isLeader, name, areaRole }: { isLeader: boolean; name: string; areaRole: string }) {
-  const { items, active } = useItems(isLeader);
+  const active = useActive();
+  const items: Item[] = [...MAIN, ...(isLeader ? [{ href: "/thanh-vien", label: "Thành viên", icon: "team" }] : [])];
   return (
     <nav className="fixed inset-y-0 left-0 z-10 hidden w-60 flex-col border-r border-line bg-surface px-3 py-5 md:flex">
       <Link href="/" className="flex items-center gap-2 px-3 pb-6">
