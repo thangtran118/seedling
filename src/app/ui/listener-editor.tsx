@@ -26,8 +26,8 @@ type Editor = {
   saved: Progress;
   progress: Progress;
   setProgress: (p: Progress) => void;
-  addUserIds: string[];
-  setAddUserIds: (ids: string[]) => void;
+  addUserIds: number[];
+  setAddUserIds: (ids: number[]) => void;
   dirty: boolean;
   reset: () => void;
   save: () => void;
@@ -49,12 +49,12 @@ export function ListenerEditor({
   initial,
   children,
 }: {
-  listenerId: string;
+  listenerId: number;
   initial: Progress;
   children: ReactNode;
 }) {
   const [progress, setProgress] = useState(initial);
-  const [addUserIds, setAddUserIds] = useState<string[]>([]);
+  const [addUserIds, setAddUserIds] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const progressDirty =
@@ -194,9 +194,7 @@ export function ListenerMainCard({ name, age, canEdit }: { name: string; age: nu
             );
           })}
         </div>
-        {canEdit && (
-          <p className="text-xs text-muted">Chạm vào {lessonUnit(route)} vừa nghe xong để cập nhật.</p>
-        )}
+        {canEdit && <p className="text-xs text-muted">Chạm vào {lessonUnit(route)} vừa nghe xong để cập nhật.</p>}
       </div>
 
       {canEdit && (
@@ -232,7 +230,7 @@ export function ListenerMainCard({ name, age, canEdit }: { name: string; age: nu
 }
 
 // Pick people one by one from the select; they queue up as chips (tap ✕ to drop one) and are added on "Lưu".
-export function CompanionPicker({ choices }: { choices: { id: string; label: string }[] }) {
+export function CompanionPicker({ choices }: { choices: { id: number; label: string }[] }) {
   const { addUserIds, setAddUserIds } = useEditor();
   const picked = choices.filter((c) => addUserIds.includes(c.id));
   const left = choices.filter((c) => !addUserIds.includes(c.id));
@@ -260,7 +258,7 @@ export function CompanionPicker({ choices }: { choices: { id: string; label: str
       {left.length > 0 && (
         <select
           value=""
-          onChange={(e) => e.target.value && setAddUserIds([...addUserIds, e.target.value])}
+          onChange={(e) => e.target.value && setAddUserIds([...addUserIds, Number(e.target.value)])}
           className={`${INPUT} h-11`}
         >
           <option value="">{picked.length ? "Thêm người nữa…" : "Thêm người đồng hành…"}</option>

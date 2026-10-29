@@ -7,7 +7,7 @@ import { INPUT } from "./kit";
 
 // Client copy of ListenerNote (the access-layer type is server-only).
 export type Note = {
-  id: string;
+  id: number;
   body: string;
   createdAt: Date;
   updatedAt: Date | null;
@@ -40,7 +40,7 @@ function Buttons({ pending, onCancel, saveLabel }: { pending: boolean; onCancel:
 }
 
 // "+ Thêm ghi chú", opening a text box in place. Only people in charge of the listener (người đồng hành) get it.
-export function NoteComposer({ listenerId }: { listenerId: string }) {
+export function NoteComposer({ listenerId }: { listenerId: number }) {
   const [open, setOpen] = useState(false);
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);

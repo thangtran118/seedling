@@ -11,7 +11,7 @@ import { ButtonLink, Card, Empty, HeaderAction, Loading, PageHeader, Section } f
 import { CompanionPicker, ListenerEditor, ListenerMainCard } from "@/app/ui/listener-editor";
 import { ListenerHistory } from "@/app/ui/listener-history";
 import { NoteComposer, NoteItem, type Note } from "@/app/ui/listener-notes";
-import { loadOr404 } from "@/app/ui/load";
+import { idOr404, loadOr404 } from "@/app/ui/load";
 
 export const metadata: Metadata = { title: "Chiên · Seedling" };
 
@@ -26,7 +26,7 @@ export default function ListenerPage(props: PageProps<"/nguoi-nghe/[id]">) {
 async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["params"] }) {
   const { id } = await params;
   const user = await requireUser();
-  const l = await loadOr404(getListenerDetail(user, id));
+  const l = await loadOr404(getListenerDetail(user, idOr404(id)));
   const members = l.canManageLinks ? await listAreaMembers(user) : [];
   const linkable = members.filter((m) => !l.links.some((x) => x.userId === m.id));
 
@@ -130,7 +130,7 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
 }
 
 // The latest note, in full, right under the mảnh; the others are in the history's "Ghi chú" tab.
-function Notes({ listenerId, notes, canAdd }: { listenerId: string; notes: Note[]; canAdd: boolean }) {
+function Notes({ listenerId, notes, canAdd }: { listenerId: number; notes: Note[]; canAdd: boolean }) {
   const [latest] = notes;
   return (
     <Section

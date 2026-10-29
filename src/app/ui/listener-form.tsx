@@ -3,7 +3,16 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { ListenerFormInput, ListenerFormResult } from "@/app/actions/listeners";
-import { applyStage, isLessonStage, ROUTE_KEYS, ROUTES, stageLabel, stagesOf, type Route, type Stage } from "@/lib/domain";
+import {
+  applyStage,
+  isLessonStage,
+  ROUTE_KEYS,
+  ROUTES,
+  stageLabel,
+  stagesOf,
+  type Route,
+  type Stage,
+} from "@/lib/domain";
 import { INPUT } from "./kit";
 
 type Values = {
@@ -33,7 +42,7 @@ export function ListenerForm({
 }) {
   const [v, setV] = useState(initial);
   const [error, setError] = useState<string | null>(null);
-  const [similar, setSimilar] = useState<{ id: string; name: string; birthYear: number | null }[] | null>(null);
+  const [similar, setSimilar] = useState<{ id: number; name: string; birthYear: number | null }[] | null>(null);
   const [pending, startTransition] = useTransition();
   const set = (k: keyof Values) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value });
   // Nothing is saved yet, so a new route just drops a lesson picked on the old one (the status stays).
@@ -46,9 +55,7 @@ export function ListenerForm({
         name: v.name,
         birthYear: v.birthYear,
         progress:
-          mode === "create"
-            ? applyStage({ route: v.route, manualStatus: "moi_quen", lessons: 0 }, v.stage)
-            : undefined,
+          mode === "create" ? applyStage({ route: v.route, manualStatus: "moi_quen", lessons: 0 }, v.stage) : undefined,
         private: {
           phone: v.phone,
           hometown: v.hometown,

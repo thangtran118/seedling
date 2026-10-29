@@ -16,10 +16,10 @@ export const LOCK_AFTER_CONSECUTIVE_FAILS = 10;
 const DUMMY_HASH_PROMISE = hash("dummy-password-for-timing");
 
 export type SessionUser = {
-  id: string;
+  id: number;
   name: string;
   role: "member" | "area_leader";
-  areaId: string;
+  areaId: number;
   mustChangePassword: boolean;
 };
 
@@ -48,7 +48,7 @@ async function recentFailures(column: typeof loginAttempts.phone | typeof loginA
   return row.n;
 }
 
-export async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
+export async function createSession(userId: number): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await db.insert(authSessions).values({ id: sha256(token), userId, expiresAt });
@@ -116,7 +116,7 @@ export async function revokeSession(token: string) {
     .where(eq(authSessions.id, sha256(token)));
 }
 
-export async function revokeAllSessions(userId: string) {
+export async function revokeAllSessions(userId: number) {
   await db
     .update(authSessions)
     .set({ revokedAt: new Date() })
@@ -129,7 +129,7 @@ export type ChangePasswordResult = { ok: true; token: string; expiresAt: Date } 
 // `current` is null for the forced first-login change: the session was opened with the temporary password, so it
 // is not asked again, but only while that temporary password is still valid.
 export async function changePassword(
-  userId: string,
+  userId: number,
   current: string | null,
   next: string,
 ): Promise<ChangePasswordResult> {

@@ -7,7 +7,7 @@ import { listAreaMembers } from "@/lib/access/members";
 import { getSessionDetail } from "@/lib/access/sessions";
 import { toLocalInputValue } from "@/lib/domain";
 import { Loading, PageHeader } from "@/app/ui/kit";
-import { loadOr404 } from "@/app/ui/load";
+import { idOr404, loadOr404 } from "@/app/ui/load";
 import { SessionForm } from "@/app/ui/session-form";
 
 export const metadata: Metadata = { title: "Sửa ca · Seedling" };
@@ -23,7 +23,7 @@ export default function EditSessionPage(props: PageProps<"/ca/[id]/sua">) {
 async function Edit({ params }: { params: PageProps<"/ca/[id]/sua">["params"] }) {
   const { id } = await params;
   const user = await requireUser();
-  const s = await loadOr404(getSessionDetail(user, id));
+  const s = await loadOr404(getSessionDetail(user, idOr404(id)));
   // Completed and cancelled sessions are history: canEdit is false for them.
   if (!s.canEdit) notFound();
 

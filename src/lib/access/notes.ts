@@ -9,7 +9,7 @@ import { forbiddenError, invalidError, notFoundError } from "./errors";
 // viewer may see (linked users, people on a session with the listener, the area leader; historyVisibleListenerIds)
 // and log that read.
 export type ListenerNote = {
-  id: string;
+  id: number;
   body: string;
   createdAt: Date;
   updatedAt: Date | null;
@@ -20,8 +20,8 @@ export type ListenerNote = {
 export const NOTE_MAX = 2000;
 
 // Newest first, per listener.
-export async function notesFor(viewer: SessionUser, listenerIds: string[]): Promise<Map<string, ListenerNote[]>> {
-  const result = new Map<string, ListenerNote[]>(listenerIds.map((id) => [id, []]));
+export async function notesFor(viewer: SessionUser, listenerIds: number[]): Promise<Map<number, ListenerNote[]>> {
+  const result = new Map<number, ListenerNote[]>(listenerIds.map((id) => [id, []]));
   if (listenerIds.length === 0) return result;
   const rows = await db
     .select({
@@ -59,7 +59,7 @@ export function cleanNoteBody(body: string) {
 
 // Any người đồng hành of the listener adds a note, whenever (often after a buổi trudo). Notes are not tied to a
 // session.
-export async function addNote(viewer: SessionUser, listenerId: string, input: { body: string }) {
+export async function addNote(viewer: SessionUser, listenerId: number, input: { body: string }) {
   const body = cleanNoteBody(input.body);
   const [listener] = await db.select({ areaId: listeners.areaId }).from(listeners).where(eq(listeners.id, listenerId));
   if (!listener || listener.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy chiên.");
@@ -75,7 +75,7 @@ export async function addNote(viewer: SessionUser, listenerId: string, input: { 
 }
 
 // Only whoever wrote a note edits or deletes it.
-async function loadOwnNote(viewer: SessionUser, noteId: string) {
+async function loadOwnNote(viewer: SessionUser, noteId: number) {
   const [row] = await db
     .select({ listenerId: listenerNotes.listenerId, authorId: listenerNotes.authorId, areaId: listeners.areaId })
     .from(listenerNotes)
@@ -86,7 +86,7 @@ async function loadOwnNote(viewer: SessionUser, noteId: string) {
   return row;
 }
 
-export async function updateNote(viewer: SessionUser, noteId: string, body: string) {
+export async function updateNote(viewer: SessionUser, noteId: number, body: string) {
   const clean = cleanNoteBody(body);
   const { listenerId } = await loadOwnNote(viewer, noteId);
   await db.transaction(async (tx) => {
@@ -95,7 +95,7 @@ export async function updateNote(viewer: SessionUser, noteId: string, body: stri
   });
 }
 
-export async function deleteNote(viewer: SessionUser, noteId: string) {
+export async function deleteNote(viewer: SessionUser, noteId: number) {
   const { listenerId } = await loadOwnNote(viewer, noteId);
   await db.transaction(async (tx) => {
     await tx.delete(listenerNotes).where(eq(listenerNotes.id, noteId));

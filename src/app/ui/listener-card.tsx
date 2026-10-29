@@ -1,10 +1,19 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { daysBetween, isClosedStage, lessonCode, lessonName, lessonProgress, lessonUnit, type Route, type Stage } from "@/lib/domain";
+import {
+  daysBetween,
+  isClosedStage,
+  lessonCode,
+  lessonName,
+  lessonProgress,
+  lessonUnit,
+  type Route,
+  type Stage,
+} from "@/lib/domain";
 import { LessonDots, StageBadge } from "./kit";
 
 type ListenerLike = {
-  id: string;
+  id: number;
   name: string;
   age: number | null;
   stage: Stage;

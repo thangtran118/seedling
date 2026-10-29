@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/access/current-user";
 import { getListenerDetail } from "@/lib/access/listeners";
 import { Loading, PageHeader } from "@/app/ui/kit";
 import { ListenerForm } from "@/app/ui/listener-form";
-import { loadOr404 } from "@/app/ui/load";
+import { idOr404, loadOr404 } from "@/app/ui/load";
 
 export const metadata: Metadata = { title: "Sửa chiên · Seedling" };
 
@@ -21,7 +21,7 @@ export default function EditListenerPage(props: PageProps<"/nguoi-nghe/[id]/sua"
 async function Edit({ params }: { params: PageProps<"/nguoi-nghe/[id]/sua">["params"] }) {
   const { id } = await params;
   const user = await requireUser();
-  const l = await loadOr404(getListenerDetail(user, id));
+  const l = await loadOr404(getListenerDetail(user, idOr404(id)));
   if (!l.canEdit || !l.private) notFound();
   const p = l.private;
   return (

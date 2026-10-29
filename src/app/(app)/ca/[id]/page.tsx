@@ -23,7 +23,7 @@ import {
 import { ProgressNote } from "@/app/ui/listener-card";
 import { ListenerHistory } from "@/app/ui/listener-history";
 import { NoteComposer } from "@/app/ui/listener-notes";
-import { firstParam, loadOr404 } from "@/app/ui/load";
+import { firstParam, idOr404, loadOr404 } from "@/app/ui/load";
 
 export const metadata: Metadata = { title: "Ca trudo · Seedling" };
 
@@ -45,7 +45,7 @@ async function Detail({
   const { id } = await params;
   const saved = firstParam((await searchParams)["da-luu"]) === "1";
   const user = await requireUser();
-  const s = await loadOr404(getSessionDetail(user, id));
+  const s = await loadOr404(getSessionDetail(user, idOr404(id)));
 
   const people = await listenersForSession(
     user,

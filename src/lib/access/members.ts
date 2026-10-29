@@ -10,7 +10,7 @@ import { forbiddenError, invalidError, notFoundError } from "./errors";
 
 export const TEMP_PASSWORD_TTL_MS = 72 * 60 * 60 * 1000;
 
-export type AreaMember = { id: string; name: string; role: "member" | "area_leader" };
+export type AreaMember = { id: number; name: string; role: "member" | "area_leader" };
 
 export type MemberAdminView = AreaMember & {
   phone: string;
@@ -39,7 +39,7 @@ export function generateTempPassword() {
   return pick(letters, 4) + pick("23456789", 4);
 }
 
-async function loadMember(viewer: SessionUser, userId: string) {
+async function loadMember(viewer: SessionUser, userId: number) {
   requireLeader(viewer);
   const [user] = await db.select().from(users).where(eq(users.id, userId));
   if (!user || user.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy thành viên.");
@@ -84,7 +84,7 @@ export async function createMember(viewer: SessionUser, input: { name: string; p
   return { phone, tempPassword };
 }
 
-export async function resetMemberPassword(viewer: SessionUser, userId: string) {
+export async function resetMemberPassword(viewer: SessionUser, userId: number) {
   const user = await loadMember(viewer, userId);
   const tempPassword = generateTempPassword();
   await db
@@ -101,7 +101,7 @@ export async function resetMemberPassword(viewer: SessionUser, userId: string) {
   return { phone: user.phone, tempPassword };
 }
 
-export async function setMemberLocked(viewer: SessionUser, userId: string, locked: boolean) {
+export async function setMemberLocked(viewer: SessionUser, userId: number, locked: boolean) {
   await loadMember(viewer, userId);
   if (userId === viewer.id && locked) throw invalidError("Không thể tự khóa tài khoản của mình.");
   await db
@@ -113,7 +113,7 @@ export async function setMemberLocked(viewer: SessionUser, userId: string, locke
 
 // Accounts with no history (e.g. never logged in) are deleted outright; accounts that
 // appear in sessions or links are deactivated so the session history stays intact.
-export async function removeMember(viewer: SessionUser, userId: string): Promise<"deleted" | "deactivated"> {
+export async function removeMember(viewer: SessionUser, userId: number): Promise<"deleted" | "deactivated"> {
   const user = await loadMember(viewer, userId);
   if (userId === viewer.id) throw invalidError("Không thể tự xóa tài khoản của mình.");
   const [{ refs }] = await db

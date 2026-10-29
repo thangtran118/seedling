@@ -14,7 +14,7 @@ import {
 } from "@/lib/access/listeners";
 import { addNote, deleteNote, updateNote } from "@/lib/access/notes";
 import { MAX_LESSONS, ROUTE_KEYS } from "@/lib/domain";
-import { guard, type ActionError } from "./guard";
+import { guard, idSchema, type ActionError } from "./guard";
 
 const optionalText = z
   .string()
@@ -49,7 +49,7 @@ const listenerSchema = z.object({
 
 export type ListenerFormInput = z.input<typeof listenerSchema>;
 export type ListenerFormResult =
-  ActionError | { ok: false; similar: { id: string; name: string; birthYear: number | null }[] };
+  ActionError | { ok: false; similar: { id: number; name: string; birthYear: number | null }[] };
 
 function parse(input: unknown) {
   const parsed = listenerSchema.safeParse(input);
@@ -67,11 +67,11 @@ export async function createListenerAction(input: ListenerFormInput): Promise<Li
     if (similar.length) return { ok: false, similar };
   }
   const result = await guard(() => createListener(user, data));
-  if (typeof result !== "string") return result;
+  if (typeof result !== "number") return result;
   redirect(`/nguoi-nghe/${result}`, RedirectType.replace); // the form page drops out of history: "back" skips it
 }
 
-export async function updateListenerAction(listenerId: string, input: ListenerFormInput): Promise<ListenerFormResult> {
+export async function updateListenerAction(listenerId: number, input: ListenerFormInput): Promise<ListenerFormResult> {
   const user = await requireUser();
   const data = parse(input);
   if (!data) return { ok: false, error: "Dữ liệu không hợp lệ." };
@@ -91,14 +91,14 @@ const saveSchema = z.object({
       lessons: z.number().int().min(0).max(MAX_LESSONS),
     })
     .optional(),
-  addUserIds: z.array(z.string().uuid()).max(50).default([]),
+  addUserIds: z.array(idSchema).max(50).default([]),
 });
 
 // The listener page's single "Lưu": route + stage + lesson (when changed) and the người đồng hành picked to add.
-export async function saveListenerAction(listenerId: string, input: z.input<typeof saveSchema>): Promise<SimpleState> {
+export async function saveListenerAction(listenerId: number, input: z.input<typeof saveSchema>): Promise<SimpleState> {
   const user = await requireUser();
   const parsed = saveSchema.safeParse(input);
-  if (!parsed.success || !z.string().uuid().safeParse(listenerId).success) return { error: "Dữ liệu không hợp lệ." };
+  if (!parsed.success || !idSchema.safeParse(listenerId).success) return { error: "Dữ liệu không hợp lệ." };
   const { progress, addUserIds } = parsed.data;
   const result = await guard(async () => {
     if (progress) await setProgress(user, listenerId, progress);
@@ -112,36 +112,35 @@ export async function saveListenerAction(listenerId: string, input: z.input<type
 const noteSchema = z.object({ body: z.string() });
 
 // Notes save on their own, outside the page's "Lưu thay đổi" bar.
-export async function addNoteAction(listenerId: string, input: z.input<typeof noteSchema>): Promise<SimpleState> {
+export async function addNoteAction(listenerId: number, input: z.input<typeof noteSchema>): Promise<SimpleState> {
   const user = await requireUser();
   const parsed = noteSchema.safeParse(input);
-  if (!parsed.success || !z.string().uuid().safeParse(listenerId).success) return { error: "Dữ liệu không hợp lệ." };
+  if (!parsed.success || !idSchema.safeParse(listenerId).success) return { error: "Dữ liệu không hợp lệ." };
   const result = await guard(() => addNote(user, listenerId, parsed.data));
   if (result) return { error: result.error };
   refresh();
   return {};
 }
 
-export async function updateNoteAction(noteId: string, body: string): Promise<SimpleState> {
+export async function updateNoteAction(noteId: number, body: string): Promise<SimpleState> {
   const user = await requireUser();
-  if (!z.string().uuid().safeParse(noteId).success || typeof body !== "string")
-    return { error: "Dữ liệu không hợp lệ." };
+  if (!idSchema.safeParse(noteId).success || typeof body !== "string") return { error: "Dữ liệu không hợp lệ." };
   const result = await guard(() => updateNote(user, noteId, body));
   if (result) return { error: result.error };
   refresh();
   return {};
 }
 
-export async function deleteNoteAction(noteId: string): Promise<SimpleState> {
+export async function deleteNoteAction(noteId: number): Promise<SimpleState> {
   const user = await requireUser();
-  if (!z.string().uuid().safeParse(noteId).success) return { error: "Dữ liệu không hợp lệ." };
+  if (!idSchema.safeParse(noteId).success) return { error: "Dữ liệu không hợp lệ." };
   const result = await guard(() => deleteNote(user, noteId));
   if (result) return { error: result.error };
   refresh();
   return {};
 }
 
-const linkSchema = z.object({ listenerId: z.string().uuid(), userId: z.string().uuid() });
+const linkSchema = z.object({ listenerId: idSchema, userId: idSchema });
 
 export async function removeLinkAction(_prev: SimpleState, formData: FormData): Promise<SimpleState> {
   const user = await requireUser();

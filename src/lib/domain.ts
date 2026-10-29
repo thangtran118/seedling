@@ -94,7 +94,7 @@ export function lessonProgress(lessonsHeard: readonly number[], route: Route) {
 }
 
 // React key for a note: changes when the note is edited, so its editor restarts from the saved text.
-export const noteKey = (n: { id: string; updatedAt: Date | string | null }) =>
+export const noteKey = (n: { id: number; updatedAt: Date | string | null }) =>
   `${n.id}-${n.updatedAt ? new Date(n.updatedAt).getTime() : 0}`;
 
 export function ageFromBirthYear(birthYear: number | null, now = new Date()): number | null {

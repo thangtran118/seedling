@@ -15,7 +15,7 @@ export function ActionForm({
   confirm,
 }: {
   action: (prev: State, formData: FormData) => Promise<State>;
-  hidden?: Record<string, string>;
+  hidden?: Record<string, string | number>;
   children: ReactNode;
   className?: string;
   confirm?: string;

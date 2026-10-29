@@ -16,7 +16,7 @@ export function ListenerHistory({
 }: {
   history: ListenerHistoryItem[] | null;
   notes: Note[] | null;
-  currentSessionId?: string;
+  currentSessionId?: number;
   anchorId?: string;
   title?: string;
 }) {

@@ -1,10 +1,9 @@
 "use server";
 
 import { refresh } from "next/cache";
-import * as z from "zod";
 import { requireUser } from "@/lib/access/current-user";
 import { createMember, removeMember, resetMemberPassword, setMemberLocked } from "@/lib/access/members";
-import { guard, isActionError } from "./guard";
+import { guard, idSchema, isActionError } from "./guard";
 
 export type MemberState =
   { error?: string; credentials?: { name: string; phone: string; tempPassword: string }; message?: string } | undefined;
@@ -19,11 +18,9 @@ export async function createMemberAction(_prev: MemberState, formData: FormData)
   return { credentials: { name: name.trim(), ...result } };
 }
 
-const userId = z.string().uuid();
-
 async function withMember(formData: FormData) {
   const user = await requireUser();
-  const parsed = userId.safeParse(formData.get("userId"));
+  const parsed = idSchema.safeParse(formData.get("userId"));
   return { user, targetId: parsed.success ? parsed.data : null, name: String(formData.get("name") ?? "") };
 }
 

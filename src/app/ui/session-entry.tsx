@@ -26,7 +26,7 @@ export async function SessionEntry({
 }) {
   const user = await requireUser();
   const sp = await searchParams;
-  const preselect = firstParam(sp["nguoi-nghe"]);
+  const preselect = Number(firstParam(sp["nguoi-nghe"]));
   const day = parseDayKey(firstParam(sp.ngay)) ?? null;
   const [all, members] = await Promise.all([listListeners(user), listAreaMembers(user)]);
   // Planning is for direct companions only: only the viewer's own listeners can be picked.

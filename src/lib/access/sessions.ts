@@ -29,7 +29,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // ---------- DTOs ----------
 
 export type SessionListItem = {
-  id: string;
+  id: number;
   kind: SessionKind;
   startsAt: Date;
   state: SessionState;
@@ -38,32 +38,32 @@ export type SessionListItem = {
   // nextLesson: the lesson to share next on the listener's route, on upcoming / in-progress sessions only and only
   // where the viewer may see the listener's history (undefined otherwise; null when the route is done).
   // owners: the listener's người đồng hành, so the session list shows whose chiên it is.
-  listeners: { id: string; name: string; owners: string[]; nextLesson?: { route: Route; n: number } | null }[];
-  members: { id: string; name: string }[];
+  listeners: { id: number; name: string; owners: string[]; nextLesson?: { route: Route; n: number } | null }[];
+  members: { id: number; name: string }[];
   isMember: boolean;
   canJoin: boolean; // upcoming or in progress, and the viewer is not in it yet (no member cap)
 };
 
 export type SessionDetail = SessionListItem & {
-  createdBy: { id: string; name: string };
+  createdBy: { id: number; name: string };
   canEdit: boolean; // upcoming or in progress, and linked to a listener of the session (outreach: its creator)
   canCancel: boolean; // upcoming or in progress, and the viewer created it
   private: { summary: string | null } | null;
 };
 
 export type DuplicateInfo = {
-  sessionId: string;
+  sessionId: number;
   state: SessionState;
   startsAt: Date;
   createdByName: string;
   listenerName: string;
 };
 
-export type WriteResult = { ok: true; id: string } | { ok: false; duplicates: DuplicateInfo[] };
+export type WriteResult = { ok: true; id: number } | { ok: false; duplicates: DuplicateInfo[] };
 
 export type CompositionInput = {
-  listenerIds: string[];
-  memberIds: string[]; // full member list; the planner is added automatically when planning
+  listenerIds: number[];
+  memberIds: number[]; // full member list; the planner is added automatically when planning
 };
 
 export type DetailsInput = {
@@ -141,9 +141,9 @@ async function validateComposition(viewer: SessionUser, kind: SessionKind, input
 
 // Same calendar day in Vietnam time, same listener, not cancelled.
 async function findSameDay(
-  listenerIds: string[],
+  listenerIds: number[],
   startsAt: Date,
-  opts: { excludeSessionId?: string; states: SessionState[] },
+  opts: { excludeSessionId?: number; states: SessionState[] },
 ): Promise<DuplicateInfo[]> {
   const day = sql`(${sessions.startsAt} at time zone ${TIME_ZONE})::date = (${startsAt.toISOString()}::timestamptz at time zone ${TIME_ZONE})::date`;
   const rows = await db
@@ -169,7 +169,7 @@ async function findSameDay(
   return rows;
 }
 
-async function writeComposition(tx: Tx, sessionId: string, c: CompositionInput) {
+async function writeComposition(tx: Tx, sessionId: number, c: CompositionInput) {
   await tx.delete(sessionListeners).where(eq(sessionListeners.sessionId, sessionId));
   await tx.delete(sessionMembers).where(eq(sessionMembers.sessionId, sessionId));
   if (c.listenerIds.length) {
@@ -178,14 +178,14 @@ async function writeComposition(tx: Tx, sessionId: string, c: CompositionInput) 
   await tx.insert(sessionMembers).values(c.memberIds.map((userId) => ({ sessionId, userId })));
 }
 
-async function writePrivate(tx: Tx, sessionId: string, p: { summary: string | null }) {
+async function writePrivate(tx: Tx, sessionId: number, p: { summary: string | null }) {
   await tx
     .insert(sessionPrivate)
     .values({ sessionId, ...p })
     .onConflictDoUpdate({ target: sessionPrivate.sessionId, set: p });
 }
 
-async function loadSession(viewer: SessionUser, sessionId: string) {
+async function loadSession(viewer: SessionUser, sessionId: number) {
   const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
   if (!row || row.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy ca.");
   return row;
@@ -194,7 +194,7 @@ async function loadSession(viewer: SessionUser, sessionId: string) {
 // Completed (start + 2 hours passed) and cancelled sessions are history: nobody joins, edits or cancels them.
 const isOpen = (row: { state: SessionState; startsAt: Date }) => isOpenPhase(sessionPhase(row.state, row.startsAt));
 
-async function sessionListenerIds(sessionId: string) {
+async function sessionListenerIds(sessionId: number) {
   const rows = await db
     .select({ id: sessionListeners.listenerId })
     .from(sessionListeners)
@@ -202,7 +202,7 @@ async function sessionListenerIds(sessionId: string) {
   return rows.map((r) => r.id);
 }
 
-async function sessionMemberIds(sessionId: string) {
+async function sessionMemberIds(sessionId: number) {
   const rows = await db
     .select({ id: sessionMembers.userId })
     .from(sessionMembers)
@@ -210,7 +210,7 @@ async function sessionMemberIds(sessionId: string) {
   return rows.map((r) => r.id);
 }
 
-async function linkedCount(userId: string, listenerIds: string[]) {
+async function linkedCount(userId: number, listenerIds: number[]) {
   if (listenerIds.length === 0) return 0;
   const rows = await db
     .select({ id: listenerLinks.listenerId })
@@ -220,7 +220,7 @@ async function linkedCount(userId: string, listenerIds: string[]) {
 }
 
 // Planning ("đặt lịch trudo") needs a link to every listener in the session.
-async function requireLinkedToAll(viewer: SessionUser, listenerIds: string[]) {
+async function requireLinkedToAll(viewer: SessionUser, listenerIds: number[]) {
   if ((await linkedCount(viewer.id, listenerIds)) !== listenerIds.length) {
     throw forbiddenError("Chỉ người đồng hành với tất cả chiên trong ca mới được đặt lịch.");
   }
@@ -228,7 +228,7 @@ async function requireLinkedToAll(viewer: SessionUser, listenerIds: string[]) {
 
 // Design decision: edit only by users linked to a listener of the session (outreach: only its creator), and only
 // while it is still open.
-async function requireEditable(viewer: SessionUser, sessionId: string) {
+async function requireEditable(viewer: SessionUser, sessionId: number) {
   const row = await loadSession(viewer, sessionId);
   if (!isOpen(row)) throw invalidError("Ca đã hoàn thành hoặc đã hủy, không sửa được nữa.");
   if (row.kind === "outreach") {
@@ -248,7 +248,7 @@ async function requireEditable(viewer: SessionUser, sessionId: string) {
 // leader has no special right). An outreach session has no listener, so anyone in the area may plan one.
 export async function planSession(
   viewer: SessionUser,
-  input: { kind: SessionKind; listenerIds: string[] } & DetailsInput & { confirmDistinct?: boolean },
+  input: { kind: SessionKind; listenerIds: number[] } & DetailsInput & { confirmDistinct?: boolean },
 ): Promise<WriteResult> {
   const details = validateDetails(input);
   if (!details.locationLabel) throw invalidError("Cần nhập nơi gặp để người khác biết mà tham gia.");
@@ -279,7 +279,7 @@ export async function planSession(
 }
 
 // Joining is only possible before a session completes, so nobody can join an old session to read its notes.
-export async function joinSession(viewer: SessionUser, sessionId: string) {
+export async function joinSession(viewer: SessionUser, sessionId: number) {
   await db.transaction(async (tx) => {
     const [row] = await tx.select().from(sessions).where(eq(sessions.id, sessionId)).for("update");
     if (!row || row.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy ca.");
@@ -290,7 +290,7 @@ export async function joinSession(viewer: SessionUser, sessionId: string) {
   });
 }
 
-export async function leaveSession(viewer: SessionUser, sessionId: string) {
+export async function leaveSession(viewer: SessionUser, sessionId: number) {
   const row = await loadSession(viewer, sessionId);
   if (!isOpen(row)) throw invalidError("Chỉ rời được ca chưa bắt đầu hoặc đang diễn ra.");
   const members = await sessionMemberIds(sessionId);
@@ -304,7 +304,7 @@ export async function leaveSession(viewer: SessionUser, sessionId: string) {
 // Edit date, place and people while the session is still open.
 export async function updateSession(
   viewer: SessionUser,
-  sessionId: string,
+  sessionId: number,
   input: Pick<CompositionInput, "memberIds"> & DetailsInput,
 ) {
   const row = await requireEditable(viewer, sessionId);
@@ -323,7 +323,7 @@ export async function updateSession(
 
 // Only the person who created the session cancels it, before it completes. There is no delete: cancelling keeps
 // every row and records who cancelled, so the session stays in the listening history as "Đã hủy".
-export async function cancelSession(viewer: SessionUser, sessionId: string) {
+export async function cancelSession(viewer: SessionUser, sessionId: number) {
   const row = await loadSession(viewer, sessionId);
   if (row.state === "cancelled") return;
   if (row.createdBy !== viewer.id) throw forbiddenError("Chỉ người tạo ca mới được hủy ca.");
@@ -358,7 +358,7 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
       .where(inArray(sessionListeners.sessionId, ids))
       .orderBy(asc(listenerLinks.createdAt)),
   ]);
-  const ownersOf = (listenerId: string) => [
+  const ownersOf = (listenerId: number) => [
     ...new Set(owners.filter((o) => o.listenerId === listenerId).map((o) => o.name)),
   ];
   const openIds = new Set(rows.filter(isOpen).map((r) => r.id));
@@ -393,7 +393,7 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
   });
 }
 
-export async function getSessionDetail(viewer: SessionUser, sessionId: string): Promise<SessionDetail> {
+export async function getSessionDetail(viewer: SessionUser, sessionId: number): Promise<SessionDetail> {
   const row = await loadSession(viewer, sessionId);
   const [item] = await hydrate(viewer, [row]);
   const listenerIds = item.listeners.map((l) => l.id);

@@ -13,9 +13,8 @@ import {
   type DuplicateInfo,
 } from "@/lib/access/sessions";
 import { fromLocalInputValue } from "@/lib/domain";
-import { guard, isActionError, type ActionError } from "./guard";
+import { guard, idSchema as id, isActionError, type ActionError } from "./guard";
 
-const id = z.string().uuid();
 const text = z
   .string()
   .nullable()
@@ -55,7 +54,7 @@ export async function planSessionAction(input: SessionPayload): Promise<SessionF
   redirect(`/ca/${result.id}?da-luu=1`, RedirectType.replace); // the form page drops out of history: "back" skips it
 }
 
-export async function updateSessionAction(sessionId: string, input: SessionPayload): Promise<SessionFormResult> {
+export async function updateSessionAction(sessionId: number, input: SessionPayload): Promise<SessionFormResult> {
   const user = await requireUser();
   const data = parse(input);
   if (!data || !id.safeParse(sessionId).success) return BAD;
@@ -73,7 +72,7 @@ function sessionIdFrom(formData: FormData) {
 
 async function simple(
   formData: FormData,
-  fn: (userId: Awaited<ReturnType<typeof requireUser>>, sid: string) => Promise<void>,
+  fn: (userId: Awaited<ReturnType<typeof requireUser>>, sid: number) => Promise<void>,
 ) {
   const user = await requireUser();
   const sid = sessionIdFrom(formData);

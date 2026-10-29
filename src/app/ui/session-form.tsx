@@ -15,20 +15,20 @@ import {
 } from "@/lib/domain";
 import { INPUT, KindIcon } from "./kit";
 
-export type PickListener = { id: string; name: string; stage: Stage; route: Route; linked: boolean };
-export type PickMember = { id: string; name: string };
+export type PickListener = { id: number; name: string; stage: Stage; route: Route; linked: boolean };
+export type PickMember = { id: number; name: string };
 
 type Mode = "plan" | "edit";
 
 export type SessionFormProps = {
   mode: Mode;
-  currentUserId: string;
+  currentUserId: number;
   listeners: PickListener[]; // choosable listeners (plan) or the fixed ones (edit)
   members: PickMember[];
   initial: {
     kind: SessionKind; // only chosen when planning
-    listenerIds: string[];
-    memberIds: string[];
+    listenerIds: number[];
+    memberIds: number[];
     startsAt: string; // datetime-local value, Vietnam time
     locationLabel: string;
     mapUrl: string;
@@ -56,8 +56,8 @@ export function SessionForm(props: SessionFormProps) {
   const outreach = kind === "outreach";
   // Planning a visit needs a listener the planner accompanies; without one only outreach is open.
   const canVisit = listeners.length > 0;
-  const [listenerIds, setListenerIds] = useState<string[]>(initial.listenerIds);
-  const [memberIds, setMemberIds] = useState<string[]>(initial.memberIds);
+  const [listenerIds, setListenerIds] = useState<number[]>(initial.listenerIds);
+  const [memberIds, setMemberIds] = useState<number[]>(initial.memberIds);
   const [startsAt, setStartsAt] = useState(initial.startsAt);
   const [locationLabel, setLocationLabel] = useState(initial.locationLabel);
   const [mapUrl, setMapUrl] = useState(initial.mapUrl);
@@ -74,7 +74,7 @@ export function SessionForm(props: SessionFormProps) {
   const others = members.filter((m) => !(recorderFixed && m.id === currentUserId));
   const totalMembers = (recorderFixed ? 1 : 0) + memberIds.length;
 
-  function toggleListener(id: string) {
+  function toggleListener(id: number) {
     if (listenerIds.includes(id)) {
       setListenerIds(listenerIds.filter((x) => x !== id));
       return;
@@ -82,7 +82,7 @@ export function SessionForm(props: SessionFormProps) {
     setListenerIds([...listenerIds, id]);
   }
 
-  function toggleMember(id: string) {
+  function toggleMember(id: number) {
     if (memberIds.includes(id)) return setMemberIds(memberIds.filter((x) => x !== id));
     setMemberIds([...memberIds, id]);
   }
@@ -353,8 +353,8 @@ function ListenerSelect({
   invalid,
 }: {
   listeners: PickListener[];
-  selected: string[];
-  onToggle: (id: string) => void;
+  selected: number[];
+  onToggle: (id: number) => void;
   invalid: boolean;
 }) {
   const [open, setOpen] = useState(false);

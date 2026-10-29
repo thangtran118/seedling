@@ -89,7 +89,7 @@ Dùng **SQL Editor** trong Neon Console, hoặc kết nối DBeaver, TablePlus, 
 psql "$NEON_URL"
 ```
 
-Thứ tự thêm và các cột cần chú ý (mọi cột `id` đều tự sinh UUID, `created_at` mặc định là `now()`):
+Thứ tự thêm và các cột cần chú ý (mọi cột `id` là số nguyên tự tăng, không cần điền; `created_at` mặc định là `now()`):
 
 1. **`areas`**: khu vực.
 2. **`users`**: thánh đồ / khu vực trưởng.
@@ -119,13 +119,13 @@ Ví dụ:
 BEGIN;
 INSERT INTO areas (name) VALUES ('Khu vực A') RETURNING id;   -- ghi lại id
 INSERT INTO users (phone, password_hash, name, area_id, role, must_change_password, temp_password_expires_at)
-VALUES ('0912345678', '<HASH>', 'Nguyễn Văn A', '<AREA_ID>', 'area_leader', true, now() + interval '72 hours')
+VALUES ('0912345678', '<HASH>', 'Nguyễn Văn A', <AREA_ID>, 'area_leader', true, now() + interval '72 hours')
 RETURNING id;                                                  -- ghi lại id
 INSERT INTO listeners (area_id, name, birth_year, manual_status, lessons_reached, first_lesson_at, created_by, created_at)
-VALUES ('<AREA_ID>', 'Trần Thị B', 1998, 'goi_mo', 3, '2026-09-15', '<USER_ID>', '2026-08-01')
+VALUES (<AREA_ID>, 'Trần Thị B', 1998, 'goi_mo', 3, '2026-09-15', <USER_ID>, '2026-08-01')
 RETURNING id;                                                  -- ghi lại id
-INSERT INTO listener_links (listener_id, user_id, added_by) VALUES ('<LISTENER_ID>', '<USER_ID>', '<USER_ID>');
-INSERT INTO private.listener_private (listener_id, phone, hometown) VALUES ('<LISTENER_ID>', '0987654321', 'Huế');
+INSERT INTO listener_links (listener_id, user_id, added_by) VALUES (<LISTENER_ID>, <USER_ID>, <USER_ID>);
+INSERT INTO private.listener_private (listener_id, phone, hometown) VALUES (<LISTENER_ID>, '0987654321', 'Huế');
 COMMIT;
 ```
 

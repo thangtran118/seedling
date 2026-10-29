@@ -1,13 +1,11 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { z } from "zod";
 import { requireUser } from "@/lib/access/current-user";
 import { memberStats } from "@/lib/access/stats";
 import { Empty, Loading, PageHeader, Section } from "@/app/ui/kit";
 import { ListenerRows } from "@/app/ui/listener-card";
 import { OverviewTiles } from "@/app/ui/listener-stats";
-import { loadOr404 } from "@/app/ui/load";
+import { idOr404, loadOr404 } from "@/app/ui/load";
 
 export const metadata: Metadata = { title: "Thống kê thành viên · Seedling" };
 
@@ -22,9 +20,8 @@ export default function MemberStatsPage(props: PageProps<"/thong-ke/thanh-vien/[
 async function Detail({ params }: { params: PageProps<"/thong-ke/thanh-vien/[id]">["params"] }) {
   const { id } = await params;
   const user = await requireUser();
-  if (!z.uuid().safeParse(id).success) notFound();
   const now = new Date();
-  const st = await loadOr404(memberStats(user, id, now));
+  const st = await loadOr404(memberStats(user, idOr404(id), now));
   return (
     <>
       <PageHeader title={st.member.name} back="/thong-ke" />

@@ -27,13 +27,13 @@ export type PersonalStats = Overview & {
 };
 
 export type MemberStats = PersonalStats & {
-  member: { id: string; name: string; role: SessionUser["role"] };
+  member: { id: number; name: string; role: SessionUser["role"] };
   listeners: ListenerSummary[];
 };
 
 // One row of the area's member table, for this month.
 export type MemberMonthRow = {
-  id: string;
+  id: number;
   name: string;
   role: SessionUser["role"];
   sessions: number;
@@ -96,7 +96,7 @@ const listenerCols = {
 };
 
 // The listeners one person walks with (người đồng hành), as counted in their own stats.
-function linkedListeners(userIds: string[], areaId: string) {
+function linkedListeners(userIds: number[], areaId: number) {
   return db
     .select({ userId: listenerLinks.userId, ...listenerCols })
     .from(listenerLinks)
@@ -105,7 +105,7 @@ function linkedListeners(userIds: string[], areaId: string) {
     .where(and(inArray(listenerLinks.userId, userIds), eq(listeners.areaId, areaId)));
 }
 
-async function personalStats(userId: string, areaId: string, now: Date): Promise<PersonalStats> {
+async function personalStats(userId: number, areaId: number, now: Date): Promise<PersonalStats> {
   const [rows, dates] = await Promise.all([
     linkedListeners([userId], areaId),
     db
@@ -129,7 +129,7 @@ export function myStats(viewer: SessionUser, now = new Date()): Promise<Personal
 }
 
 // Leader: one member of the area, with the listeners they walk with.
-export async function memberStats(viewer: SessionUser, memberId: string, now = new Date()): Promise<MemberStats> {
+export async function memberStats(viewer: SessionUser, memberId: number, now = new Date()): Promise<MemberStats> {
   if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng xem được thống kê.");
   const [member] = await db
     .select({ id: users.id, name: users.name, role: users.role, areaId: users.areaId })

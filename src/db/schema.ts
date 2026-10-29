@@ -13,12 +13,11 @@ import {
   smallint,
   text,
   timestamp,
-  uuid,
   varchar,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
-const id = () => uuid("id").primaryKey().defaultRandom();
+const id = () => integer("id").primaryKey().generatedAlwaysAsIdentity();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
 export const roleEnum = pgEnum("role", ["member", "area_leader"]);
@@ -40,7 +39,7 @@ export const users = pgTable("users", {
   phone: varchar("phone", { length: 20 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: varchar("name", { length: 100 }).notNull(),
-  areaId: uuid("area_id")
+  areaId: integer("area_id")
     .notNull()
     .references(() => areas.id),
   role: roleEnum("role").notNull().default("member"),
@@ -48,14 +47,14 @@ export const users = pgTable("users", {
   tempPasswordExpiresAt: timestamp("temp_password_expires_at", { withTimezone: true }),
   failedLogins: integer("failed_logins").notNull().default(0),
   lockedAt: timestamp("locked_at", { withTimezone: true }),
-  createdBy: uuid("created_by"),
+  createdBy: integer("created_by"),
   active: boolean("active").notNull().default(true),
   createdAt: createdAt(),
 });
 
 export const authSessions = pgTable("auth_sessions", {
   id: varchar("id", { length: 64 }).primaryKey(), // sha256 of the cookie token
-  userId: uuid("user_id")
+  userId: integer("user_id")
     .notNull()
     .references(() => users.id),
   createdAt: createdAt(),
@@ -75,7 +74,7 @@ export const listeners = pgTable(
   "listeners",
   {
     id: id(),
-    areaId: uuid("area_id")
+    areaId: integer("area_id")
       .notNull()
       .references(() => areas.id),
     name: varchar("name", { length: 100 }).notNull(),
@@ -88,7 +87,7 @@ export const listeners = pgTable(
     // (null when not / no longer): the monthly stats count each listener from these moments.
     firstLessonAt: timestamp("first_lesson_at", { withTimezone: true }),
     baptizedAt: timestamp("baptized_at", { withTimezone: true }),
-    createdBy: uuid("created_by")
+    createdBy: integer("created_by")
       .notNull()
       .references(() => users.id),
     createdAt: createdAt(),
@@ -105,13 +104,13 @@ export const listeners = pgTable(
 export const listenerLinks = pgTable(
   "listener_links",
   {
-    listenerId: uuid("listener_id")
+    listenerId: integer("listener_id")
       .notNull()
       .references(() => listeners.id),
-    userId: uuid("user_id")
+    userId: integer("user_id")
       .notNull()
       .references(() => users.id),
-    addedBy: uuid("added_by")
+    addedBy: integer("added_by")
       .notNull()
       .references(() => users.id),
     createdAt: createdAt(),
@@ -121,10 +120,10 @@ export const listenerLinks = pgTable(
 
 export const sessions = pgTable("sessions", {
   id: id(),
-  areaId: uuid("area_id")
+  areaId: integer("area_id")
     .notNull()
     .references(() => areas.id),
-  createdBy: uuid("created_by")
+  createdBy: integer("created_by")
     .notNull()
     .references(() => users.id),
   kind: sessionKindEnum("kind").notNull().default("visit"),
@@ -132,7 +131,7 @@ export const sessions = pgTable("sessions", {
   locationLabel: varchar("location_label", { length: 80 }),
   mapUrl: varchar("map_url", { length: 500 }),
   state: sessionStateEnum("state").notNull(),
-  cancelledBy: uuid("cancelled_by").references(() => users.id),
+  cancelledBy: integer("cancelled_by").references(() => users.id),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
@@ -140,10 +139,10 @@ export const sessions = pgTable("sessions", {
 export const sessionMembers = pgTable(
   "session_members",
   {
-    sessionId: uuid("session_id")
+    sessionId: integer("session_id")
       .notNull()
       .references(() => sessions.id),
-    userId: uuid("user_id")
+    userId: integer("user_id")
       .notNull()
       .references(() => users.id),
   },
@@ -153,10 +152,10 @@ export const sessionMembers = pgTable(
 export const sessionListeners = pgTable(
   "session_listeners",
   {
-    sessionId: uuid("session_id")
+    sessionId: integer("session_id")
       .notNull()
       .references(() => sessions.id),
-    listenerId: uuid("listener_id")
+    listenerId: integer("listener_id")
       .notNull()
       .references(() => listeners.id),
   },
@@ -165,12 +164,12 @@ export const sessionListeners = pgTable(
 
 export const piiAccessLog = pgTable("pii_access_log", {
   id: id(),
-  viewerId: uuid("viewer_id")
+  viewerId: integer("viewer_id")
     .notNull()
     .references(() => users.id),
-  listenerId: uuid("listener_id").references(() => listeners.id),
-  sessionId: uuid("session_id").references(() => sessions.id),
-  targetUserId: uuid("target_user_id").references(() => users.id),
+  listenerId: integer("listener_id").references(() => listeners.id),
+  sessionId: integer("session_id").references(() => sessions.id),
+  targetUserId: integer("target_user_id").references(() => users.id),
   reason: varchar("reason", { length: 50 }).notNull(),
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -178,7 +177,7 @@ export const piiAccessLog = pgTable("pii_access_log", {
 export const privateSchema = pgSchema("private");
 
 export const listenerPrivate = privateSchema.table("listener_private", {
-  listenerId: uuid("listener_id")
+  listenerId: integer("listener_id")
     .primaryKey()
     .references(() => listeners.id),
   phone: varchar("phone", { length: 20 }),
@@ -193,10 +192,10 @@ export const listenerNotes = privateSchema.table(
   "listener_notes",
   {
     id: id(),
-    listenerId: uuid("listener_id")
+    listenerId: integer("listener_id")
       .notNull()
       .references(() => listeners.id),
-    authorId: uuid("author_id")
+    authorId: integer("author_id")
       .notNull()
       .references(() => users.id),
     body: text("body").notNull(),
@@ -207,7 +206,7 @@ export const listenerNotes = privateSchema.table(
 );
 
 export const sessionPrivate = privateSchema.table("session_private", {
-  sessionId: uuid("session_id")
+  sessionId: integer("session_id")
     .primaryKey()
     .references(() => sessions.id),
   summary: text("summary"),

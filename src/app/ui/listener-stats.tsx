@@ -43,7 +43,7 @@ export function MemberMonthTable({
   linkRows,
 }: {
   rows: MemberMonthRow[];
-  viewerId: string;
+  viewerId: number;
   linkRows: boolean;
 }) {
   if (rows.length === 0) return <Empty>Khu vực chưa có thành viên.</Empty>;

@@ -31,7 +31,7 @@ import { cleanNoteBody, notesFor, type ListenerNote } from "./notes";
 // ---------- DTOs: the only listener shapes that leave the access layer ----------
 
 export type ListenerSummary = {
-  id: string;
+  id: number;
   name: string;
   age: number | null;
   stage: Stage;
@@ -52,7 +52,7 @@ export type ListenerPrivateFields = {
 };
 
 export type ListenerHistoryItem = {
-  sessionId: string;
+  sessionId: number;
   startsAt: Date;
   state: SessionState;
   locationLabel: string | null;
@@ -61,7 +61,7 @@ export type ListenerHistoryItem = {
 
 export type ListenerDetail = ListenerSummary & {
   birthYear: number | null;
-  links: { userId: string; name: string; primary: boolean }[]; // primary: created the listener, cannot be removed
+  links: { userId: number; name: string; primary: boolean }[]; // primary: created the listener, cannot be removed
   canEdit: boolean;
   canManageLinks: boolean;
   private: ListenerPrivateFields | null; // null when the viewer may not see it
@@ -74,7 +74,7 @@ export type ListenerDetail = ListenerSummary & {
 // User-typed search text must not act as LIKE wildcards.
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, "\\$&");
 
-export async function isLinked(userId: string, listenerId: string) {
+export async function isLinked(userId: number, listenerId: number) {
   const [row] = await db
     .select({ one: sql`1` })
     .from(listenerLinks)
@@ -85,7 +85,7 @@ export async function isLinked(userId: string, listenerId: string) {
 // Listening history (which day each session was, who went) and the notes are visible to the listener's linked
 // users, to anyone who went or is going on a session with them (cancelled ones do not count), and to the area
 // leader. Returns the subset of listenerIds (all in the viewer's area) whose history this viewer may see.
-export async function historyVisibleListenerIds(viewer: SessionUser, listenerIds: string[]): Promise<Set<string>> {
+export async function historyVisibleListenerIds(viewer: SessionUser, listenerIds: number[]): Promise<Set<number>> {
   const ids = [...new Set(listenerIds)];
   if (ids.length === 0) return new Set();
   if (viewer.role === "area_leader") return new Set(ids);
@@ -113,8 +113,8 @@ export async function historyVisibleListenerIds(viewer: SessionUser, listenerIds
 // Progress is sequential: reaching lesson N counts 1..N-1 as heard too, so only the highest lesson reached
 // (set directly on the listener) is stored — this fills that in as a contiguous 1..N run per listener, on the
 // listener's route.
-export async function lessonsHeardFor(listenerIds: string[]): Promise<Map<string, { route: Route; heard: number[] }>> {
-  const result = new Map<string, { route: Route; heard: number[] }>(
+export async function lessonsHeardFor(listenerIds: number[]): Promise<Map<number, { route: Route; heard: number[] }>> {
+  const result = new Map<number, { route: Route; heard: number[] }>(
     listenerIds.map((id) => [id, { route: DEFAULT_ROUTE, heard: [] }]),
   );
   if (listenerIds.length === 0) return result;
@@ -122,12 +122,11 @@ export async function lessonsHeardFor(listenerIds: string[]): Promise<Map<string
     .select({ id: listeners.id, route: listeners.route, latest: listeners.lessonsReached })
     .from(listeners)
     .where(inArray(listeners.id, listenerIds));
-  for (const r of rows)
-    result.set(r.id, { route: r.route, heard: Array.from({ length: r.latest }, (_, i) => i + 1) });
+  for (const r of rows) result.set(r.id, { route: r.route, heard: Array.from({ length: r.latest }, (_, i) => i + 1) });
   return result;
 }
 
-async function lastDoneFor(listenerIds: string[]): Promise<Map<string, Date>> {
+async function lastDoneFor(listenerIds: number[]): Promise<Map<number, Date>> {
   if (listenerIds.length === 0) return new Map();
   const rows = await db
     .select({ listenerId: sessionListeners.listenerId, last: max(sessions.startsAt) })
@@ -170,7 +169,7 @@ async function summarize(viewer: SessionUser, rows: (typeof listeners.$inferSele
   });
 }
 
-async function loadInArea(viewer: SessionUser, listenerId: string) {
+async function loadInArea(viewer: SessionUser, listenerId: number) {
   const [row] = await db.select().from(listeners).where(eq(listeners.id, listenerId));
   // Cross-area access is out of MVP scope: a listener from another area simply does not exist for this viewer.
   if (!row || row.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy chiên.");
@@ -188,7 +187,7 @@ export type ListenerListItem = ListenerSummary & {
 };
 
 // Listeners the viewer has been on a session with: started (not only planned) and not cancelled.
-async function wentWithIds(viewer: SessionUser, listenerIds: string[]): Promise<Set<string>> {
+async function wentWithIds(viewer: SessionUser, listenerIds: number[]): Promise<Set<number>> {
   if (listenerIds.length === 0) return new Set();
   const rows = await db
     .selectDistinct({ id: sessionListeners.listenerId })
@@ -216,12 +215,18 @@ export async function listListeners(viewer: SessionUser, opts: { query?: string 
     .from(listeners)
     .where(and(eq(listeners.areaId, viewer.areaId), q ? ilike(listeners.name, `%${escapeLike(q)}%`) : undefined))
     .orderBy(asc(listeners.name));
-  const [summaries, went] = await Promise.all([summarize(viewer, rows), wentWithIds(viewer, rows.map((r) => r.id))]);
+  const [summaries, went] = await Promise.all([
+    summarize(viewer, rows),
+    wentWithIds(
+      viewer,
+      rows.map((r) => r.id),
+    ),
+  ]);
   return summaries.map((l) => ({ ...l, mine: l.linked || went.has(l.id) }));
 }
 
 // Leader view of one member's listeners (the member stats page). Same summary shape as the list.
-export async function listListenersLinkedTo(viewer: SessionUser, userId: string): Promise<ListenerSummary[]> {
+export async function listListenersLinkedTo(viewer: SessionUser, userId: number): Promise<ListenerSummary[]> {
   if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng xem được.");
   const rows = await db
     .select()
@@ -249,7 +254,7 @@ export type SessionListener = ListenerSummary & {
 // may open (getSessionDetail checks that). Contact fields follow the listener rule: linked users and the area
 // leader only; history and notes follow the history rule (people on a session with the listener too). Each read is logged
 // exactly like the listener page.
-export async function listenersForSession(viewer: SessionUser, listenerIds: string[]): Promise<SessionListener[]> {
+export async function listenersForSession(viewer: SessionUser, listenerIds: number[]): Promise<SessionListener[]> {
   if (listenerIds.length === 0) return [];
   const rows = await db
     .select()
@@ -299,7 +304,7 @@ export async function listenersForSession(viewer: SessionUser, listenerIds: stri
   });
 }
 
-export async function getListenerDetail(viewer: SessionUser, listenerId: string): Promise<ListenerDetail> {
+export async function getListenerDetail(viewer: SessionUser, listenerId: number): Promise<ListenerDetail> {
   const row = await loadInArea(viewer, listenerId);
   const [summary] = await summarize(viewer, [row]);
 
@@ -342,7 +347,7 @@ export async function getListenerDetail(viewer: SessionUser, listenerId: string)
   };
 }
 
-async function listenerHistory(listenerId: string): Promise<ListenerHistoryItem[]> {
+async function listenerHistory(listenerId: number): Promise<ListenerHistoryItem[]> {
   const rows = await db
     .select({
       sessionId: sessions.id,
@@ -423,7 +428,7 @@ const hasAny = (p: ListenerPrivateFields) => Object.values(p).some((v) => v !== 
 export async function createListener(
   viewer: SessionUser,
   input: ListenerInput & { progress?: Progress; note?: string | null },
-): Promise<string> {
+): Promise<number> {
   const clean = validateListenerInput(input);
   // The first note can be written with the new listener; later ones are added on the listener page.
   const note = input.note?.trim() ? cleanNoteBody(input.note) : null;
@@ -457,7 +462,7 @@ export async function createListener(
   });
 }
 
-async function requireLinked(viewer: SessionUser, listenerId: string) {
+async function requireLinked(viewer: SessionUser, listenerId: number) {
   await loadInArea(viewer, listenerId);
   if (!(await isLinked(viewer.id, listenerId))) {
     throw forbiddenError("Chỉ người đồng hành của chiên này mới được sửa.");
@@ -465,7 +470,7 @@ async function requireLinked(viewer: SessionUser, listenerId: string) {
 }
 
 // Only directly linked users edit a listener; the area leader has no special edit right (design decision).
-export async function updateListener(viewer: SessionUser, listenerId: string, input: ListenerInput) {
+export async function updateListener(viewer: SessionUser, listenerId: number, input: ListenerInput) {
   await requireLinked(viewer, listenerId);
   const clean = validateListenerInput(input);
   await db.transaction(async (tx) => {
@@ -491,11 +496,7 @@ function checkLessons(route: Route, lessons: number) {
 // Route, stage and lesson are edited together on the listener page (lessons 0 = chưa nghe bài nào); sessions do
 // not record lessons. `expectedRoute` is the saved route the page was showing: if someone has changed the route
 // since, nothing is written (lesson 3 picked on route B must not land as F3).
-export async function setProgress(
-  viewer: SessionUser,
-  listenerId: string,
-  p: Progress & { expectedRoute: Route },
-) {
+export async function setProgress(viewer: SessionUser, listenerId: number, p: Progress & { expectedRoute: Route }) {
   await requireLinked(viewer, listenerId);
   checkLessons(p.route, p.lessons);
   const updated = await db
@@ -519,7 +520,7 @@ export async function setProgress(
 }
 
 // Linked users and the area leader may add a link (a leader adding themselves is how they gain edit rights).
-export async function addLink(viewer: SessionUser, listenerId: string, targetUserId: string) {
+export async function addLink(viewer: SessionUser, listenerId: number, targetUserId: number) {
   await loadInArea(viewer, listenerId);
   if (viewer.role !== "area_leader" && !(await isLinked(viewer.id, listenerId))) {
     throw forbiddenError("Chỉ người đồng hành hoặc khu vực trưởng mới được thêm người đồng hành.");
@@ -535,7 +536,7 @@ export async function addLink(viewer: SessionUser, listenerId: string, targetUse
 
 // Removing links is a leader action. The person who created the listener (người đồng hành chính) stays, so every
 // listener keeps at least that one link and stays editable.
-export async function removeLink(viewer: SessionUser, listenerId: string, targetUserId: string) {
+export async function removeLink(viewer: SessionUser, listenerId: number, targetUserId: number) {
   const row = await loadInArea(viewer, listenerId);
   if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng mới được bỏ người đồng hành.");
   if (targetUserId === row.createdBy) throw invalidError("Không thể bỏ người đồng hành chính (người tạo chiên).");

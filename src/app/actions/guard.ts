@@ -1,5 +1,9 @@
 import "server-only";
+import * as z from "zod";
 import { AccessError } from "@/lib/access/errors";
+
+// Database ids are Postgres integer identity columns. Coerces, so it also reads FormData strings.
+export const idSchema = z.coerce.number().int().positive().max(2_147_483_647);
 
 export type ActionError = { ok: false; error: string };
 
