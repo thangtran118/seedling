@@ -31,12 +31,12 @@ const FILTERS = [
   { key: "", label: "Tất cả", match: () => true },
   {
     key: "chua-manh",
-    label: "Mới quen · Gợi mở",
+    label: "Mới quen\nGợi mở",
     match: (l: ListenerSummary) => l.stage === "moi_quen" || l.stage === "goi_mo",
   },
   {
     key: "manh",
-    label: "Đang nghe mảnh",
+    label: "Mảnh 1–7",
     match: (l: ListenerSummary) => !isClosedStage(l.stage) && l.lessons.length > 0,
   },
   { key: "baptem", label: "Báptem", match: (l: ListenerSummary) => l.stage === "baptem" },
@@ -64,25 +64,28 @@ async function List({ searchParams }: { searchParams: PageProps<"/nguoi-nghe">["
     <>
       <div className="flex flex-col gap-3">
         <SearchBox placeholder="Tìm theo tên…" />
-        <nav aria-label="Lọc theo trạng thái" className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
-          <ul className="flex w-max gap-2">
+        {/* Five equal cells in one row: no sideways scrolling on a phone, and the counts read as an overview. */}
+        <nav aria-label="Lọc theo trạng thái" className="md:max-w-xl">
+          <ul className="grid grid-cols-5 overflow-hidden rounded-2xl border border-line bg-surface">
             {FILTERS.map((f) => {
               const on = f === filter;
               const n = all.filter(f.match).length;
               return (
-                <li key={f.key}>
+                <li key={f.key} className="border-l border-line first:border-l-0">
                   <Link
                     href={chipHref(f.key)}
                     scroll={false}
                     aria-current={on ? "true" : undefined}
-                    className={`inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-sm transition-colors ${
-                      on
-                        ? "bg-accent font-semibold text-on-accent"
-                        : "border border-line bg-surface text-ink hover:bg-sunken"
+                    className={`flex h-full min-h-16 flex-col items-center justify-center gap-0.5 px-0.5 py-2 text-center transition-colors ${
+                      on ? "bg-accent text-on-accent" : "text-ink hover:bg-sunken"
                     }`}
                   >
-                    {f.label}
-                    <span className={`tabular-nums ${on ? "opacity-80" : "text-muted"}`}>{n}</span>
+                    <span className="text-lg font-bold leading-none tabular-nums">{n}</span>
+                    <span
+                      className={`whitespace-pre-line text-[11px] leading-tight ${on ? "font-semibold" : "text-muted"}`}
+                    >
+                      {f.label}
+                    </span>
                   </Link>
                 </li>
               );
