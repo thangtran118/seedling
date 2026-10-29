@@ -36,7 +36,7 @@ const FILTERS = [
   },
   {
     key: "manh",
-    label: "Mảnh 1–7",
+    label: "Đang nghe", // any route; the key stays "manh" so saved links keep working
     match: (l: ListenerSummary) => !isClosedStage(l.stage) && l.lessons.length > 0,
   },
   { key: "baptem", label: "Báptem", match: (l: ListenerSummary) => l.stage === "baptem" },

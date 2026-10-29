@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/access/current-user";
 import { Loading, PageHeader } from "@/app/ui/kit";
 import { ListenerForm } from "@/app/ui/listener-form";
 import { firstParam } from "@/app/ui/load";
+import { DEFAULT_ROUTE } from "@/lib/domain";
 
 export const metadata: Metadata = { title: "Thêm chiên · Seedling" };
 
@@ -30,6 +31,7 @@ async function Form({ searchParams }: { searchParams: PageProps<"/nguoi-nghe/moi
       initial={{
         name,
         birthYear: "",
+        route: DEFAULT_ROUTE,
         stage: "moi_quen",
         phone: "",
         hometown: "",

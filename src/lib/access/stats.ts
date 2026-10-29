@@ -17,7 +17,7 @@ import { completedAt } from "./phase";
 export type Overview = {
   sessionsThisWeek: number;
   newThisMonth: number; // added this month, with contact info
-  sharedTruth: number; // listeners who have reached mảnh 1
+  sharedTruth: number; // listeners who have ever reached lesson 1 (on any route)
   baptized: number;
   total: number;
 };
@@ -46,7 +46,7 @@ export type AreaStats = {
 };
 
 type Milestones = { createdAt: Date; firstLessonAt: Date | null; baptizedAt: Date | null };
-type ListenerRow = Milestones & { lessonsReached: number; manualStatus: string; hasContact: boolean };
+type ListenerRow = Milestones & { manualStatus: string; hasContact: boolean };
 
 const monthKey = (d: Date) => dayKey(d).slice(0, 7);
 const monthFrom = (now: Date) => dayStart(`${monthKey(now)}-01`);
@@ -55,7 +55,8 @@ function listenerNumbers(rows: ListenerRow[], now: Date) {
   const from = monthFrom(now).getTime();
   return {
     newThisMonth: rows.filter((r) => r.hasContact && r.createdAt.getTime() >= from).length,
-    sharedTruth: rows.filter((r) => r.lessonsReached > 0).length,
+    // first_lesson_at, not the current lesson: a listener who moved to another route (back to 0) still heard it.
+    sharedTruth: rows.filter((r) => r.firstLessonAt !== null).length,
     baptized: rows.filter((r) => r.manualStatus === "baptem").length,
     total: rows.length,
   };
@@ -84,7 +85,6 @@ const milestoneCols = {
 
 const listenerCols = {
   ...milestoneCols,
-  lessonsReached: listeners.lessonsReached,
   manualStatus: listeners.manualStatus,
   // Only whether a contact exists, never its value.
   hasContact: sql<boolean>`coalesce(${or(

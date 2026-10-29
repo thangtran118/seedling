@@ -2,7 +2,16 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BackLink } from "./back-link";
-import { LESSONS, PHASE_LABEL, stageLabel, type SessionKind, type SessionPhase, type Stage } from "@/lib/domain";
+import {
+  lessonsOf,
+  lessonUnit,
+  PHASE_LABEL,
+  stageLabel,
+  type Route,
+  type SessionKind,
+  type SessionPhase,
+  type Stage,
+} from "@/lib/domain";
 
 // actionDesktopOnly: phones get the same action as a floating button under the thumb (FabStack) instead.
 export function PageHeader({
@@ -82,7 +91,7 @@ export function TextLink({ href, children }: { href: string; children: ReactNode
   );
 }
 
-// Mảnh 1-7 share one tone; the other stages keep their own.
+// Lessons (any route) share one tone; the other stages keep their own.
 const STAGE_TONE = {
   moi_quen: "bg-line/50 text-ink",
   goi_mo: "bg-amber-500/15 text-amber-800 dark:text-amber-300",
@@ -91,7 +100,7 @@ const STAGE_TONE = {
   tu_choi: "bg-danger/10 text-danger",
 };
 
-// The one status shown for a listener everywhere: Mới quen, Gợi mở, Mảnh 1-7, Báptem, Từ chối.
+// The one status shown for a listener everywhere: Mới quen, Gợi mở, the lesson on their route, Báptem, Từ chối.
 // Two people (meeting listeners) or a door (going out to knock).
 export function KindIcon({ kind, size = 18 }: { kind: SessionKind; size?: number }) {
   return (
@@ -116,23 +125,26 @@ export function KindIcon({ kind, size = 18 }: { kind: SessionKind; size?: number
   );
 }
 
-export function StageBadge({ stage, size = "sm" }: { stage: Stage; size?: "sm" | "md" }) {
+export function StageBadge({ stage, route, size = "sm" }: { stage: Stage; route: Route; size?: "sm" | "md" }) {
   const tone = STAGE_TONE[stage in STAGE_TONE ? (stage as keyof typeof STAGE_TONE) : "lesson"];
   const text = size === "md" ? "px-2.5 py-1 text-sm font-semibold" : "px-2 py-0.5 text-xs font-medium";
   return (
     <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full ${text} ${tone}`}>
-      {stageLabel(stage)}
+      {stageLabel(stage, route)}
     </span>
   );
 }
 
-// Seven small squares, filled up through the highest lesson heard (progress is sequential: no gaps).
-// Greyed out once the listener is báptem / từ chối.
-export function LessonDots({ heard, closed = false }: { heard: number[]; closed?: boolean }) {
+// One small square per lesson on the route (7, 12 or 5), filled up through the highest lesson heard (progress is
+// sequential: no gaps). Greyed out once the listener is báptem / từ chối. Twelve wrap onto two rows on a phone.
+export function LessonDots({ heard, route, closed = false }: { heard: number[]; route: Route; closed?: boolean }) {
   const box = "h-5 w-5 text-[10px]";
   return (
-    <span className="inline-flex gap-1" aria-label={`Đã nghe mảnh ${heard.join(", ") || "chưa có"}`}>
-      {LESSONS.map((l) => (
+    <span
+      className="inline-flex flex-wrap gap-1"
+      aria-label={`Đã nghe ${lessonUnit(route)} ${heard.join(", ") || "chưa có"}`}
+    >
+      {lessonsOf(route).map((l) => (
         <span
           key={l}
           className={`inline-flex ${box} items-center justify-center rounded font-semibold ${

@@ -30,11 +30,15 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
   const members = l.canManageLinks ? await listAreaMembers(user) : [];
   const linkable = members.filter((m) => !l.links.some((x) => x.userId === m.id));
 
-  const saved = { manualStatus: l.manualStatus, lessons: l.lessons.length };
+  const saved = { route: l.route, manualStatus: l.manualStatus, lessons: l.lessons.length };
 
   return (
     // key: start a fresh draft from the saved values after each save
-    <ListenerEditor key={`${saved.manualStatus}-${saved.lessons}-${l.links.length}`} listenerId={l.id} initial={saved}>
+    <ListenerEditor
+      key={`${saved.route}-${saved.manualStatus}-${saved.lessons}-${l.links.length}`}
+      listenerId={l.id}
+      initial={saved}
+    >
       <PageHeader
         title="Chiên"
         back="/nguoi-nghe"

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { SessionListItem } from "@/lib/access/sessions";
-import { dayKey, formatTime, sessionPhase, WEEKDAY_SHORT, weekdayIndex } from "@/lib/domain";
+import { dayKey, formatTime, lessonCode, lessonName, sessionPhase, WEEKDAY_SHORT, weekdayIndex } from "@/lib/domain";
 import { KindIcon, PHASE_TONE, PhaseBadge } from "./kit";
 
 const names = (xs: { name: string }[]) => xs.map((x) => x.name).join(", ");
@@ -27,7 +27,7 @@ function Owners({ listeners }: { listeners: SessionListItem["listeners"] }) {
   );
 }
 
-// Listener names, each followed by the mảnh to share next when the viewer may see it: "Lan M4, Hùng M2".
+// Listener names, each followed by the lesson to share next when the viewer may see it: "Lan M4, Hùng B2".
 function ListenerNames({ listeners }: { listeners: SessionListItem["listeners"] }) {
   return (
     <>
@@ -38,9 +38,9 @@ function ListenerNames({ listeners }: { listeners: SessionListItem["listeners"] 
           {l.nextLesson != null && (
             <span
               className="ml-1 inline-flex items-center rounded-md bg-done/15 px-1.5 align-[1px] text-[11px] font-bold tabular-nums text-done"
-              aria-label={`kế tiếp mảnh ${l.nextLesson}`}
+              aria-label={`kế tiếp ${lessonName(l.nextLesson.route, l.nextLesson.n)}`}
             >
-              M{l.nextLesson}
+              {lessonCode(l.nextLesson.route, l.nextLesson.n)}
             </span>
           )}
         </span>

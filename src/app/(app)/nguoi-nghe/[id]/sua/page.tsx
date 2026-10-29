@@ -33,6 +33,8 @@ async function Edit({ params }: { params: PageProps<"/nguoi-nghe/[id]/sua">["par
         initial={{
           name: l.name,
           birthYear: l.birthYear ? String(l.birthYear) : "",
+          // Route and status are not edited here (listener page); the form only sends them on create.
+          route: l.route,
           stage: "moi_quen",
           phone: p.phone ?? "",
           hometown: p.hometown ?? "",

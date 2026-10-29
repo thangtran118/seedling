@@ -15,9 +15,11 @@ import {
 import {
   ageFromBirthYear,
   stageOf,
-  LESSONS,
+  DEFAULT_ROUTE,
+  ROUTES,
   type ManualStatus,
   type Progress,
+  type Route,
   type SessionState,
   type Stage,
 } from "@/lib/domain";
@@ -34,6 +36,7 @@ export type ListenerSummary = {
   age: number | null;
   stage: Stage;
   manualStatus: ManualStatus;
+  route: Route;
   lessons: number[];
   linked: boolean;
   owners: string[]; // names of the linked users (người đồng hành)
@@ -108,19 +111,19 @@ export async function historyVisibleListenerIds(viewer: SessionUser, listenerIds
 }
 
 // Progress is sequential: reaching lesson N counts 1..N-1 as heard too, so only the highest lesson reached
-// (set directly on the listener) is stored — this fills that in as a contiguous 1..N run per listener.
-export async function lessonsHeardFor(listenerIds: string[]): Promise<Map<string, number[]>> {
-  const result = new Map<string, number[]>(listenerIds.map((id) => [id, []]));
+// (set directly on the listener) is stored — this fills that in as a contiguous 1..N run per listener, on the
+// listener's route.
+export async function lessonsHeardFor(listenerIds: string[]): Promise<Map<string, { route: Route; heard: number[] }>> {
+  const result = new Map<string, { route: Route; heard: number[] }>(
+    listenerIds.map((id) => [id, { route: DEFAULT_ROUTE, heard: [] }]),
+  );
   if (listenerIds.length === 0) return result;
   const rows = await db
-    .select({ id: listeners.id, latest: listeners.lessonsReached })
+    .select({ id: listeners.id, route: listeners.route, latest: listeners.lessonsReached })
     .from(listeners)
     .where(inArray(listeners.id, listenerIds));
   for (const r of rows)
-    result.set(
-      r.id,
-      Array.from({ length: r.latest }, (_, i) => i + 1),
-    );
+    result.set(r.id, { route: r.route, heard: Array.from({ length: r.latest }, (_, i) => i + 1) });
   return result;
 }
 
@@ -151,13 +154,14 @@ async function summarize(viewer: SessionUser, rows: (typeof listeners.$inferSele
   ]);
   const linkedIds = new Set(links.filter((l) => l.userId === viewer.id).map((l) => l.listenerId));
   return rows.map((r) => {
-    const heard = lessons.get(r.id) ?? [];
+    const heard = lessons.get(r.id)?.heard ?? [];
     return {
       id: r.id,
       name: r.name,
       age: ageFromBirthYear(r.birthYear),
       stage: stageOf({ manualStatus: r.manualStatus, lessons: heard.length }),
       manualStatus: r.manualStatus,
+      route: r.route,
       lessons: heard,
       linked: linkedIds.has(r.id),
       owners: links.filter((l) => l.listenerId === r.id).map((l) => l.name),
@@ -413,9 +417,13 @@ export async function createListener(
   const clean = validateListenerInput(input);
   // The first note can be written with the new listener; later ones are added on the listener page.
   const note = input.note?.trim() ? cleanNoteBody(input.note) : null;
-  // A listener may be added part-way: at mảnh N, or already báptem / từ chối.
-  const { manualStatus, lessons } = input.progress ?? { manualStatus: "moi_quen", lessons: 0 };
-  if (!Number.isInteger(lessons) || lessons < 0 || lessons > LESSONS.length) throw invalidError("Mảnh không hợp lệ.");
+  // A listener may be added part-way: at lesson N of their route, or already báptem / từ chối.
+  const { route, manualStatus, lessons } = input.progress ?? {
+    route: DEFAULT_ROUTE,
+    manualStatus: "moi_quen",
+    lessons: 0,
+  };
+  checkLessons(route, lessons);
 
   return db.transaction(async (tx) => {
     const [row] = await tx
@@ -425,6 +433,7 @@ export async function createListener(
         name: clean.name,
         birthYear: clean.birthYear,
         manualStatus,
+        route,
         lessonsReached: lessons,
         firstLessonAt: lessons > 0 ? new Date() : null,
         baptizedAt: manualStatus === "baptem" ? new Date() : null,
@@ -462,22 +471,41 @@ export async function updateListener(viewer: SessionUser, listenerId: string, in
   });
 }
 
-// Stage and mảnh are edited together on the listener page (lessons 0 = chưa nghe mảnh nào); sessions do not
-// record lessons.
-export async function setProgress(viewer: SessionUser, listenerId: string, p: Progress) {
+// The bound is checked here so a bad number reads as a message; the DB check "lessons_reached_range" backs it up.
+function checkLessons(route: Route, lessons: number) {
+  if (!(route in ROUTES)) throw invalidError("Lộ trình không hợp lệ.");
+  if (!Number.isInteger(lessons) || lessons < 0 || lessons > ROUTES[route].count)
+    throw invalidError("Bài không hợp lệ.");
+}
+
+// Route, stage and lesson are edited together on the listener page (lessons 0 = chưa nghe bài nào); sessions do
+// not record lessons. `expectedRoute` is the saved route the page was showing: if someone has changed the route
+// since, nothing is written (lesson 3 picked on route B must not land as F3).
+export async function setProgress(
+  viewer: SessionUser,
+  listenerId: string,
+  p: Progress & { expectedRoute: Route },
+) {
   await requireLinked(viewer, listenerId);
-  if (!Number.isInteger(p.lessons) || p.lessons < 0 || p.lessons > LESSONS.length)
-    throw invalidError("Mảnh không hợp lệ.");
-  await db
+  checkLessons(p.route, p.lessons);
+  const updated = await db
     .update(listeners)
     .set({
+      route: p.route,
       manualStatus: p.manualStatus,
       lessonsReached: p.lessons,
-      // Keeps the first time mảnh 1 was reached; going back to 0 means they have not heard it after all.
-      firstLessonAt: p.lessons === 0 ? null : sql`coalesce(${listeners.firstLessonAt}, now())`,
+      // Keeps the first time lesson 1 was reached. Going back to 0 on the same route means they have not heard it
+      // after all; a route change (which starts at 0) keeps it, they did hear the truth.
+      firstLessonAt:
+        p.lessons > 0
+          ? sql`coalesce(${listeners.firstLessonAt}, now())`
+          : sql`case when ${listeners.route} = ${p.route} and ${listeners.lessonsReached} > 0 then null
+              else ${listeners.firstLessonAt} end`,
       baptizedAt: p.manualStatus === "baptem" ? sql`coalesce(${listeners.baptizedAt}, now())` : null,
     })
-    .where(eq(listeners.id, listenerId));
+    .where(and(eq(listeners.id, listenerId), eq(listeners.route, p.expectedRoute)))
+    .returning({ id: listeners.id });
+  if (updated.length === 0) throw invalidError("Lộ trình của chiên vừa được người khác đổi. Tải lại trang.");
 }
 
 // Linked users and the area leader may add a link (a leader adding themselves is how they gain edit rights).

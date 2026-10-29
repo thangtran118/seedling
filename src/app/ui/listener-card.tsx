@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { daysBetween, isClosedStage, LESSONS, lessonProgress, type Stage } from "@/lib/domain";
+import { daysBetween, isClosedStage, lessonCode, lessonName, lessonProgress, lessonUnit, type Route, type Stage } from "@/lib/domain";
 import { LessonDots, StageBadge } from "./kit";
 
 type ListenerLike = {
@@ -8,25 +8,26 @@ type ListenerLike = {
   name: string;
   age: number | null;
   stage: Stage;
+  route: Route;
   lessons: number[];
   owners?: string[];
 };
 
 // One line under the dots: how far, and what comes next (not for báptem / từ chối).
-export function ProgressNote({ lessons, stage }: { lessons: number[]; stage: Stage }) {
-  const { latest, count, next } = lessonProgress(lessons);
+export function ProgressNote({ lessons, stage, route }: { lessons: number[]; stage: Stage; route: Route }) {
+  const { latest, count, total, next } = lessonProgress(lessons, route);
   return (
     <p className="text-xs text-muted">
       {latest === null ? (
-        "Chưa nghe mảnh nào"
+        `Chưa nghe ${lessonUnit(route)} nào`
       ) : (
         <>
-          {count}/{LESSONS.length} mảnh
+          {count}/{total} {lessonUnit(route)}
           {!isClosedStage(stage) &&
             (next !== null ? (
               <>
                 {" "}
-                · kế tiếp <b className="text-ink">mảnh {next}</b>
+                · kế tiếp <b className="text-ink">{lessonName(route, next)}</b>
               </>
             ) : (
               " · đã nghe đủ"
@@ -37,7 +38,7 @@ export function ProgressNote({ lessons, stage }: { lessons: number[]; stage: Sta
   );
 }
 
-// Same layout as the listener page's main card: name and status on top, age, then the mảnh.
+// Same layout as the listener page's main card: name and status on top, age, then the lessons.
 export function ListenerCard({ l, footer }: { l: ListenerLike; footer?: ReactNode }) {
   return (
     <Link
@@ -46,12 +47,12 @@ export function ListenerCard({ l, footer }: { l: ListenerLike; footer?: ReactNod
     >
       <div className="flex items-start justify-between gap-2">
         <span className="truncate text-lg font-bold leading-tight text-ink">{l.name}</span>
-        <StageBadge stage={l.stage} />
+        <StageBadge stage={l.stage} route={l.route} />
       </div>
       <span className="text-sm text-muted">{l.age === null ? "Chưa rõ tuổi" : `${l.age} tuổi`}</span>
       <div className="mt-1 flex flex-col gap-1">
-        <LessonDots heard={l.lessons} closed={isClosedStage(l.stage)} />
-        <ProgressNote lessons={l.lessons} stage={l.stage} />
+        <LessonDots heard={l.lessons} route={l.route} closed={isClosedStage(l.stage)} />
+        <ProgressNote lessons={l.lessons} stage={l.stage} route={l.route} />
       </div>
       {l.owners && (
         <p className="mt-1 truncate border-t border-line pt-1.5 text-sm text-muted">
@@ -64,7 +65,7 @@ export function ListenerCard({ l, footer }: { l: ListenerLike; footer?: ReactNod
 }
 
 export function ListenerRow({ l, now = new Date() }: { l: ListenerLike & { lastDoneAt?: Date | null }; now?: Date }) {
-  const { next } = lessonProgress(l.lessons);
+  const { count, total, next } = lessonProgress(l.lessons, l.route);
   const days = l.lastDoneAt ? daysBetween(new Date(l.lastDoneAt), now) : null;
   return (
     <Link
@@ -74,18 +75,18 @@ export function ListenerRow({ l, now = new Date() }: { l: ListenerLike & { lastD
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-center gap-2">
           <span className="truncate font-semibold text-ink">{l.name}</span>
-          <StageBadge stage={l.stage} />
+          <StageBadge stage={l.stage} route={l.route} />
         </div>
-        <LessonDots heard={l.lessons} closed={isClosedStage(l.stage)} />
+        <LessonDots heard={l.lessons} route={l.route} closed={isClosedStage(l.stage)} />
       </div>
       <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
         {isClosedStage(l.stage) ? (
           <span className="text-xs text-muted">
-            {l.lessons.length}/{LESSONS.length} mảnh
+            {count}/{total} {lessonUnit(l.route)}
           </span>
         ) : next !== null ? (
           <span className="text-sm text-muted">
-            kế tiếp <b className="text-base tabular-nums text-ink">M{next}</b>
+            kế tiếp <b className="text-base tabular-nums text-ink">{lessonCode(l.route, next)}</b>
           </span>
         ) : (
           <span className="text-sm font-semibold text-done">Đã nghe đủ</span>

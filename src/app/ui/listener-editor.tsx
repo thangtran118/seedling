@@ -2,11 +2,28 @@
 
 import { createContext, useContext, useState, useTransition, type ReactNode } from "react";
 import { saveListenerAction } from "@/app/actions/listeners";
-import { applyStage, LESSONS, nextLesson, stageLabel, STAGES, stageOf, tapLesson, type Progress } from "@/lib/domain";
+import {
+  applyStage,
+  changeRoute,
+  lessonName,
+  lessonsOf,
+  lessonUnit,
+  nextLesson,
+  ROUTE_KEYS,
+  ROUTES,
+  stageLabel,
+  stageOf,
+  stagesOf,
+  tapLesson,
+  type Progress,
+  type Route,
+} from "@/lib/domain";
 import { INPUT, StageBadge } from "./kit";
 
-// Listener page edits (stage, mảnh, người đồng hành to add) stay local until the one "Lưu" bar at the bottom.
+// Listener page edits (route, stage, lesson, người đồng hành to add) stay local until the one "Lưu" bar at the
+// bottom.
 type Editor = {
+  saved: Progress;
   progress: Progress;
   setProgress: (p: Progress) => void;
   addUserIds: string[];
@@ -40,7 +57,10 @@ export function ListenerEditor({
   const [addUserIds, setAddUserIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const progressDirty = progress.manualStatus !== initial.manualStatus || progress.lessons !== initial.lessons;
+  const progressDirty =
+    progress.route !== initial.route ||
+    progress.manualStatus !== initial.manualStatus ||
+    progress.lessons !== initial.lessons;
 
   const reset = () => {
     setProgress(initial);
@@ -51,7 +71,7 @@ export function ListenerEditor({
     startTransition(async () => {
       setError(null);
       const result = await saveListenerAction(listenerId, {
-        progress: progressDirty ? progress : undefined,
+        progress: progressDirty ? { ...progress, expectedRoute: initial.route } : undefined,
         addUserIds,
       });
       if (result?.error) setError(result.error);
@@ -60,6 +80,7 @@ export function ListenerEditor({
   return (
     <EditorContext
       value={{
+        saved: initial,
         progress,
         setProgress,
         addUserIds,
@@ -77,15 +98,33 @@ export function ListenerEditor({
   );
 }
 
-// Who, then the mảnh: "Đang nghe mảnh N" and the next one to share over the seven mảnh, the current one ringed.
-// People in charge edit it by tapping a mảnh or with the status select below, saved with the page's "Lưu" bar.
+// Who, then the lessons: "Đang nghe mảnh N" (or B N / F N) and the next one to share over the route's lessons, the
+// current one ringed. People in charge edit it by tapping a lesson or with the route and status selects below,
+// saved with the page's "Lưu" bar.
 export function ListenerMainCard({ name, age, canEdit }: { name: string; age: number | null; canEdit: boolean }) {
-  const { progress, setProgress } = useEditor();
+  const { saved, progress, setProgress } = useEditor();
+  const { route } = progress;
   const stage = stageOf(progress);
   const closed = progress.manualStatus === "baptem" || progress.manualStatus === "tu_choi";
-  const heard = LESSONS.filter((n) => n <= progress.lessons);
-  const next = nextLesson(heard);
+  const lessons = lessonsOf(route);
+  const heard = lessons.filter((n) => n <= progress.lessons);
+  const next = nextLesson(heard, route);
   const listening = !closed && progress.lessons > 0;
+
+  // A new route starts from 0. Going back to the saved route brings the saved progress back; leaving a route with
+  // saved progress asks first, since saving wipes it.
+  const pickRoute = (to: Route) => {
+    if (to === saved.route) return setProgress(saved);
+    if (
+      saved.lessons > 0 &&
+      progress.route === saved.route &&
+      !window.confirm(
+        `Tiến độ đã lưu (${stageLabel(stageOf(saved), saved.route)}) sẽ bị xoá khi lưu. Đổi sang ${ROUTES[to].name}?`,
+      )
+    )
+      return;
+    setProgress(changeRoute(progress, to));
+  };
 
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
@@ -99,33 +138,34 @@ export function ListenerMainCard({ name, age, canEdit }: { name: string; age: nu
           {listening ? (
             <p>
               Đang nghe{" "}
-              <b className="text-base font-semibold text-accent">
-                mảnh <span className="tabular-nums">{progress.lessons}</span>
-              </b>
-              <span className="tabular-nums">/{LESSONS.length}</span>
+              <b className="text-base font-semibold tabular-nums text-accent">{lessonName(route, progress.lessons)}</b>
+              <span className="tabular-nums">/{lessons.length}</span>
             </p>
           ) : (
             <p className="flex items-center gap-2">
-              <StageBadge stage={stage} />
+              <StageBadge stage={stage} route={route} />
               {closed && (
                 <span className="tabular-nums">
-                  đã nghe {progress.lessons}/{LESSONS.length} mảnh
+                  đã nghe {progress.lessons}/{lessons.length} {lessonUnit(route)}
                 </span>
               )}
             </p>
           )}
           {!closed &&
             (next === null ? (
-              <p className="font-semibold text-done">Đã nghe đủ 7 mảnh</p>
+              <p className="font-semibold text-done">
+                Đã nghe đủ {lessons.length} {lessonUnit(route)}
+              </p>
             ) : (
               <p>
-                Kế tiếp <b className="font-semibold text-ink tabular-nums">mảnh {next}</b>
+                Kế tiếp <b className="font-semibold text-ink tabular-nums">{lessonName(route, next)}</b>
               </p>
             ))}
         </div>
 
+        {/* Seven per row: Mảnh 1-7 and F1-F5 fit on one row, B1-B12 wraps onto two. */}
         <div className="grid grid-cols-7 gap-1.5">
-          {LESSONS.map((n) => {
+          {lessons.map((n) => {
             const on = n <= progress.lessons;
             const current = listening && n === progress.lessons;
             const cls = `flex h-11 items-center justify-center rounded-lg text-base font-bold tabular-nums transition-colors ${
@@ -141,7 +181,7 @@ export function ListenerMainCard({ name, age, canEdit }: { name: string; age: nu
                 type="button"
                 aria-pressed={on}
                 aria-current={current ? "step" : undefined}
-                aria-label={`Mảnh ${n}`}
+                aria-label={stageLabel(`${n}`, route)}
                 onClick={() => setProgress(tapLesson(progress, n))}
                 className={`${cls} active:scale-95`}
               >
@@ -154,24 +194,38 @@ export function ListenerMainCard({ name, age, canEdit }: { name: string; age: nu
             );
           })}
         </div>
-        {canEdit && <p className="text-xs text-muted">Chạm vào mảnh vừa nghe xong để cập nhật.</p>}
+        {canEdit && (
+          <p className="text-xs text-muted">Chạm vào {lessonUnit(route)} vừa nghe xong để cập nhật.</p>
+        )}
       </div>
 
       {canEdit && (
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted">Trạng thái</span>
-          <select
-            value={stage}
-            onChange={(e) => setProgress(applyStage(progress, e.target.value as typeof stage))}
-            className={`${INPUT} h-11`}
-          >
-            {STAGES.map((s) => (
-              <option key={s} value={s}>
-                {stageLabel(s)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted">Lộ trình</span>
+            <select value={route} onChange={(e) => pickRoute(e.target.value as Route)} className={`${INPUT} h-11`}>
+              {ROUTE_KEYS.map((r) => (
+                <option key={r} value={r}>
+                  {ROUTES[r].name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted">Trạng thái</span>
+            <select
+              value={stage}
+              onChange={(e) => setProgress(applyStage(progress, e.target.value as typeof stage))}
+              className={`${INPUT} h-11`}
+            >
+              {stagesOf(route).map((s) => (
+                <option key={s} value={s}>
+                  {stageLabel(s, route)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       )}
     </section>
   );

@@ -13,6 +13,7 @@ import {
   updateListener,
 } from "@/lib/access/listeners";
 import { addNote, deleteNote, updateNote } from "@/lib/access/notes";
+import { MAX_LESSONS, ROUTE_KEYS } from "@/lib/domain";
 import { guard, type ActionError } from "./guard";
 
 const optionalText = z
@@ -29,8 +30,10 @@ const listenerSchema = z.object({
     .transform((v) => (v === "" || v === null || v === undefined ? null : Number(v))),
   progress: z
     .object({
+      route: z.enum(ROUTE_KEYS).default("manh"),
       manualStatus: z.enum(["moi_quen", "goi_mo", "baptem", "tu_choi"]),
-      lessons: z.number().int().min(0).max(7),
+      // The per-route bound is checked in the access layer.
+      lessons: z.number().int().min(0).max(MAX_LESSONS),
     })
     .optional(),
   private: z.object({
@@ -82,14 +85,16 @@ export type SimpleState = { error?: string } | undefined;
 const saveSchema = z.object({
   progress: z
     .object({
+      route: z.enum(ROUTE_KEYS),
+      expectedRoute: z.enum(ROUTE_KEYS), // the saved route the page was showing
       manualStatus: z.enum(["moi_quen", "goi_mo", "baptem", "tu_choi"]),
-      lessons: z.number().int().min(0).max(7),
+      lessons: z.number().int().min(0).max(MAX_LESSONS),
     })
     .optional(),
   addUserIds: z.array(z.string().uuid()).max(50).default([]),
 });
 
-// The listener page's single "Lưu": stage + mảnh (when changed) and the người đồng hành picked to add.
+// The listener page's single "Lưu": route + stage + lesson (when changed) and the người đồng hành picked to add.
 export async function saveListenerAction(listenerId: string, input: z.input<typeof saveSchema>): Promise<SimpleState> {
   const user = await requireUser();
   const parsed = saveSchema.safeParse(input);

@@ -26,6 +26,8 @@ export const manualStatusEnum = pgEnum("manual_status", ["moi_quen", "goi_mo", "
 export const sessionStateEnum = pgEnum("session_state", ["planned", "cancelled"]);
 // visit: meeting chosen listeners. outreach: going out to meet new people at a place (gõ cửa…), with no listener.
 export const sessionKindEnum = pgEnum("session_kind", ["visit", "outreach"]);
+// Lộ trình nghe: Mảnh 1-7, B1-B12 or F1-F5 (domain.ts ROUTES).
+export const listeningRouteEnum = pgEnum("listening_route", ["manh", "b", "f"]);
 
 export const areas = pgTable("areas", {
   id: id(),
@@ -79,10 +81,11 @@ export const listeners = pgTable(
     name: varchar("name", { length: 100 }).notNull(),
     birthYear: smallint("birth_year"),
     manualStatus: manualStatusEnum("manual_status").notNull().default("moi_quen"),
-    // Highest mảnh reached, set directly on the listener (0 = none yet).
+    route: listeningRouteEnum("route").notNull().default("manh"),
+    // Highest lesson reached on that route, set directly on the listener (0 = none yet).
     lessonsReached: smallint("lessons_reached").notNull().default(0),
-    // When the listener first reached mảnh 1 and when they were marked báptem (null when not / no longer): the
-    // monthly stats count each listener from these moments.
+    // When the listener first reached lesson 1 (kept when the route changes) and when they were marked báptem
+    // (null when not / no longer): the monthly stats count each listener from these moments.
     firstLessonAt: timestamp("first_lesson_at", { withTimezone: true }),
     baptizedAt: timestamp("baptized_at", { withTimezone: true }),
     createdBy: uuid("created_by")
@@ -90,7 +93,13 @@ export const listeners = pgTable(
       .references(() => users.id),
     createdAt: createdAt(),
   },
-  (t) => [check("lessons_reached_range", sql`${t.lessonsReached} between 0 and 7`)],
+  // Upper bound per route; keep in step with domain.ts ROUTES.
+  (t) => [
+    check(
+      "lessons_reached_range",
+      sql`${t.lessonsReached} >= 0 and ${t.lessonsReached} <= case ${t.route} when 'b' then 12 when 'f' then 5 else 7 end`,
+    ),
+  ],
 );
 
 export const listenerLinks = pgTable(

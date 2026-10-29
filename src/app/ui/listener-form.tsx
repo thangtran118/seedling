@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { ListenerFormInput, ListenerFormResult } from "@/app/actions/listeners";
-import { applyStage, stageLabel, STAGES, type Stage } from "@/lib/domain";
+import { applyStage, isLessonStage, ROUTE_KEYS, ROUTES, stageLabel, stagesOf, type Route, type Stage } from "@/lib/domain";
 import { INPUT } from "./kit";
 
 type Values = {
   name: string;
   birthYear: string;
+  route: Route;
   stage: Stage;
   phone: string;
   hometown: string;
@@ -35,6 +36,8 @@ export function ListenerForm({
   const [similar, setSimilar] = useState<{ id: string; name: string; birthYear: number | null }[] | null>(null);
   const [pending, startTransition] = useTransition();
   const set = (k: keyof Values) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value });
+  // Nothing is saved yet, so a new route just drops a lesson picked on the old one (the status stays).
+  const setRoute = (route: Route) => setV({ ...v, route, stage: isLessonStage(v.stage) ? "moi_quen" : v.stage });
 
   function send(confirmNew: boolean) {
     setError(null);
@@ -42,7 +45,10 @@ export function ListenerForm({
       const result = await submit({
         name: v.name,
         birthYear: v.birthYear,
-        progress: mode === "create" ? applyStage({ manualStatus: "moi_quen", lessons: 0 }, v.stage) : undefined,
+        progress:
+          mode === "create"
+            ? applyStage({ route: v.route, manualStatus: "moi_quen", lessons: 0 }, v.stage)
+            : undefined,
         private: {
           phone: v.phone,
           hometown: v.hometown,
@@ -97,16 +103,28 @@ export function ListenerForm({
           />
         </label>
         {mode === "create" && (
-          <label className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold text-ink">Trạng thái</span>
-            <select value={v.stage} onChange={set("stage")} className={input}>
-              {STAGES.map((s) => (
-                <option key={s} value={s}>
-                  {stageLabel(s)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-semibold text-ink">Lộ trình</span>
+              <select value={v.route} onChange={(e) => setRoute(e.target.value as Route)} className={input}>
+                {ROUTE_KEYS.map((r) => (
+                  <option key={r} value={r}>
+                    {ROUTES[r].name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="col-span-2 flex flex-col gap-1.5">
+              <span className="text-sm font-semibold text-ink">Trạng thái</span>
+              <select value={v.stage} onChange={set("stage")} className={input}>
+                {stagesOf(v.route).map((s) => (
+                  <option key={s} value={s}>
+                    {stageLabel(s, v.route)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
         )}
       </div>
 

@@ -228,12 +228,12 @@ function ListenerPanel({ l }: { l: SessionListener }) {
           </Link>
           <p className="text-sm text-muted">{l.age === null ? "Chưa rõ tuổi" : `${l.age} tuổi`}</p>
         </div>
-        <StageBadge stage={l.stage} size="md" />
+        <StageBadge stage={l.stage} route={l.route} size="md" />
       </div>
 
       <div className="flex flex-col gap-1">
-        <LessonDots heard={l.lessons} closed={isClosedStage(l.stage)} />
-        <ProgressNote lessons={l.lessons} stage={l.stage} />
+        <LessonDots heard={l.lessons} route={l.route} closed={isClosedStage(l.stage)} />
+        <ProgressNote lessons={l.lessons} stage={l.stage} route={l.route} />
       </div>
 
       {l.private && (

@@ -1,7 +1,25 @@
 // Client-safe domain types, labels and pure rules. No database access here.
 
 export const TIME_ZONE = "Asia/Ho_Chi_Minh";
-export const LESSONS = [1, 2, 3, 4, 5, 6, 7] as const;
+
+// Lộ trình nghe: each listener follows one route, chosen when added (Mảnh 1-7 by default) and changeable later.
+// Changing it starts the new route from 0. The DB check "lessons_reached_range" mirrors these counts.
+export type Route = "manh" | "b" | "f";
+export const ROUTES: Record<Route, { name: string; short: string; count: number }> = {
+  manh: { name: "Mảnh 1–7", short: "M", count: 7 },
+  b: { name: "B1–B12", short: "B", count: 12 },
+  f: { name: "F1–F5", short: "F", count: 5 },
+};
+export const ROUTE_KEYS = ["manh", "b", "f"] as const satisfies readonly Route[];
+export const DEFAULT_ROUTE: Route = "manh";
+export const MAX_LESSONS = Math.max(...ROUTE_KEYS.map((r) => ROUTES[r].count));
+
+export const lessonsOf = (route: Route) => Array.from({ length: ROUTES[route].count }, (_, i) => i + 1);
+// "mảnh 3" / "B3" / "F2" inside a sentence; "M3" / "B3" / "F2" on chips.
+export const lessonName = (route: Route, n: number) => (route === "manh" ? `mảnh ${n}` : `${ROUTES[route].short}${n}`);
+export const lessonCode = (route: Route, n: number) => `${ROUTES[route].short}${n}`;
+// What a lesson is called in counts: "4/7 mảnh", "4/12 bài".
+export const lessonUnit = (route: Route) => (route === "manh" ? "mảnh" : "bài");
 // No caps on people per session: 2-4 người trudo and 1-2 chiên is only what a session usually looks like.
 
 export type ManualStatus = "moi_quen" | "goi_mo" | "baptem" | "tu_choi";
@@ -16,47 +34,63 @@ export const STATUS_LABEL: Record<ManualStatus, string> = {
   tu_choi: "Từ chối",
 };
 
-// The one status shown everywhere: Mới quen, Gợi mở, Mảnh 1-7, Báptem, Từ chối. It is stored as two columns
-// (manual status + lessons reached); these helpers convert between the two. Báptem / từ chối are never changed
-// automatically (design doc, Luật trạng thái); otherwise the highest mảnh reached wins over mới quen / gợi mở.
-export type Stage = "moi_quen" | "goi_mo" | "baptem" | "tu_choi" | `${(typeof LESSONS)[number]}`;
-export type Progress = { manualStatus: ManualStatus; lessons: number };
+// The one status shown everywhere: Mới quen, Gợi mở, the lessons of the listener's route (Mảnh 1-7, B1-B12 or
+// F1-F5), Báptem, Từ chối. It is stored as two columns (manual status + lessons reached); these helpers convert
+// between the two. Báptem / từ chối are never changed automatically (design doc, Luật trạng thái); otherwise the
+// highest lesson reached wins over mới quen / gợi mở. A lesson stage is just its number; the route names it.
+export type Stage = ManualStatus | `${number}`;
+export type Progress = { route: Route; manualStatus: ManualStatus; lessons: number };
 
-export const STAGES: Stage[] = ["moi_quen", "goi_mo", ...LESSONS.map((n) => `${n}` as Stage), "baptem", "tu_choi"];
+export const stagesOf = (route: Route): Stage[] => [
+  "moi_quen",
+  "goi_mo",
+  ...lessonsOf(route).map((n) => `${n}` as Stage),
+  "baptem",
+  "tu_choi",
+];
 
 const isClosed = (s: ManualStatus) => s === "baptem" || s === "tu_choi";
 export const isClosedStage = (s: Stage) => s === "baptem" || s === "tu_choi";
+export const isLessonStage = (s: Stage) => !(s in STATUS_LABEL);
 
-export function stageOf({ manualStatus, lessons }: Progress): Stage {
+export function stageOf({ manualStatus, lessons }: Pick<Progress, "manualStatus" | "lessons">): Stage {
   if (isClosed(manualStatus) || lessons === 0) return manualStatus;
   return `${lessons}` as Stage;
 }
 
-export const stageLabel = (stage: Stage) =>
-  stage in STATUS_LABEL ? STATUS_LABEL[stage as ManualStatus] : `Mảnh ${stage}`;
+export const stageLabel = (stage: Stage, route: Route) =>
+  stage in STATUS_LABEL
+    ? STATUS_LABEL[stage as ManualStatus]
+    : route === "manh"
+      ? `Mảnh ${stage}`
+      : lessonCode(route, Number(stage));
 
-// Mới quen / Gợi mở mean no lesson yet; a mảnh reopens a báptem / từ chối listener; báptem / từ chối keep the
-// lessons reached so far.
+// Mới quen / Gợi mở mean no lesson yet; a lesson reopens a báptem / từ chối listener; báptem / từ chối keep the
+// lessons reached so far. The route never changes here.
 export function applyStage(p: Progress, stage: Stage): Progress {
-  if (stage === "moi_quen" || stage === "goi_mo") return { manualStatus: stage, lessons: 0 };
-  if (stage === "baptem" || stage === "tu_choi") return { manualStatus: stage, lessons: p.lessons };
-  return { manualStatus: isClosed(p.manualStatus) ? "goi_mo" : p.manualStatus, lessons: Number(stage) };
+  if (stage === "moi_quen" || stage === "goi_mo") return { ...p, manualStatus: stage, lessons: 0 };
+  if (stage === "baptem" || stage === "tu_choi") return { ...p, manualStatus: stage };
+  return { ...p, manualStatus: isClosed(p.manualStatus) ? "goi_mo" : p.manualStatus, lessons: Number(stage) };
 }
 
-// Tapping mảnh N marks 1..N as heard; tapping the highest one again steps back to N-1.
+// Tapping lesson N marks 1..N as heard; tapping the highest one again steps back to N-1.
 export const tapLesson = (p: Progress, n: number): Progress => ({ ...p, lessons: p.lessons === n ? n - 1 : n });
 
-// The mảnh to share next: the smallest lesson not heard yet (null when all 7 are done).
-export function nextLesson(lessonsHeard: readonly number[]): number | null {
-  return LESSONS.find((l) => !lessonsHeard.includes(l)) ?? null;
+// A new route starts from 0; the status (gợi mở, báptem, …) stays. The server applies the same rule on save.
+export const changeRoute = (p: Progress, route: Route): Progress =>
+  p.route === route ? p : { ...p, route, lessons: 0 };
+
+// The lesson to share next: the smallest one on the route not heard yet (null when the route is done).
+export function nextLesson(lessonsHeard: readonly number[], route: Route): number | null {
+  return lessonsOf(route).find((l) => !lessonsHeard.includes(l)) ?? null;
 }
 
-// "Đang ở mảnh mấy": progress is sequential — reaching mảnh N means 1..N-1 are done too, so only the
+// "Đang ở bài mấy": progress is sequential — reaching lesson N means 1..N-1 are done too, so only the
 // highest lesson reached matters. `lessonsHeard` is expected to already be that contiguous 1..N run
 // (see lessonsHeardFor), so this is just naming its edges.
-export function lessonProgress(lessonsHeard: readonly number[]) {
+export function lessonProgress(lessonsHeard: readonly number[], route: Route) {
   const latest = lessonsHeard.length ? Math.max(...lessonsHeard) : null;
-  return { latest, count: latest ?? 0, next: nextLesson(lessonsHeard) };
+  return { latest, count: latest ?? 0, total: ROUTES[route].count, next: nextLesson(lessonsHeard, route) };
 }
 
 // React key for a note: changes when the note is edited, so its editor restarts from the saved text.

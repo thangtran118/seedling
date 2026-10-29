@@ -39,7 +39,7 @@ export async function SessionEntry({
     <SessionForm
       mode="plan"
       currentUserId={user.id}
-      listeners={listeners.map(({ id, name, stage, linked }) => ({ id, name, stage, linked }))}
+      listeners={listeners.map(({ id, name, stage, route, linked }) => ({ id, name, stage, route, linked }))}
       members={members.map(({ id, name }) => ({ id, name }))}
       submit={planSessionAction}
       initial={{

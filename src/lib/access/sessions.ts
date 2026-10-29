@@ -11,7 +11,15 @@ import {
   sessions,
   users,
 } from "@/db/schema";
-import { isOpenPhase, nextLesson, sessionPhase, TIME_ZONE, type SessionKind, type SessionState } from "@/lib/domain";
+import {
+  isOpenPhase,
+  nextLesson,
+  sessionPhase,
+  TIME_ZONE,
+  type Route,
+  type SessionKind,
+  type SessionState,
+} from "@/lib/domain";
 import type { SessionUser } from "./auth";
 import { historyVisibleListenerIds, lessonsHeardFor } from "./listeners";
 import { forbiddenError, invalidError, notFoundError } from "./errors";
@@ -27,10 +35,10 @@ export type SessionListItem = {
   state: SessionState;
   locationLabel: string | null;
   mapUrl: string | null; // Google Maps link to the meeting place, area-visible like the place name
-  // nextLesson: the mảnh to share next, on upcoming / in-progress sessions only and only where the viewer may see
-  // the listener's history (undefined otherwise; null when all seven are heard).
+  // nextLesson: the lesson to share next on the listener's route, on upcoming / in-progress sessions only and only
+  // where the viewer may see the listener's history (undefined otherwise; null when the route is done).
   // owners: the listener's người đồng hành, so the session list shows whose chiên it is.
-  listeners: { id: string; name: string; owners: string[]; nextLesson?: number | null }[];
+  listeners: { id: string; name: string; owners: string[]; nextLesson?: { route: Route; n: number } | null }[];
   members: { id: string; name: string }[];
   isMember: boolean;
   canJoin: boolean; // upcoming or in progress, and the viewer is not in it yet (no member cap)
@@ -357,6 +365,10 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
   const progressIds = [...new Set(ls.filter((l) => openIds.has(l.sessionId)).map((l) => l.id))];
   const visible = await historyVisibleListenerIds(viewer, progressIds);
   const heard = await lessonsHeardFor([...visible]);
+  const nextOn = (p: { route: Route; heard: number[] } | undefined) => {
+    const n = p ? nextLesson(p.heard, p.route) : null;
+    return p && n !== null ? { route: p.route, n } : null;
+  };
   return rows.map((r) => {
     const members = ms.filter((m) => m.sessionId === r.id).map(({ id, name }) => ({ id, name }));
     const isMember = members.some((m) => m.id === viewer.id);
@@ -371,7 +383,7 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
         .filter((l) => l.sessionId === r.id)
         .map(({ id, name }) =>
           openIds.has(r.id) && visible.has(id)
-            ? { id, name, owners: ownersOf(id), nextLesson: nextLesson(heard.get(id) ?? []) }
+            ? { id, name, owners: ownersOf(id), nextLesson: nextOn(heard.get(id)) }
             : { id, name, owners: ownersOf(id) },
         ),
       members,

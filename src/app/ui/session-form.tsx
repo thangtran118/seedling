@@ -10,11 +10,12 @@ import {
   sessionPhase,
   stageLabel,
   type SessionKind,
+  type Route,
   type Stage,
 } from "@/lib/domain";
 import { INPUT, KindIcon } from "./kit";
 
-export type PickListener = { id: string; name: string; stage: Stage; linked: boolean };
+export type PickListener = { id: string; name: string; stage: Stage; route: Route; linked: boolean };
 export type PickMember = { id: string; name: string };
 
 type Mode = "plan" | "edit";
@@ -436,7 +437,7 @@ function ListenerSelect({
                 >
                   <Check on={on} />
                   <span className="flex-1 font-medium text-ink">{l.name}</span>
-                  <span className="text-xs text-muted">{stageLabel(l.stage)}</span>
+                  <span className="text-xs text-muted">{stageLabel(l.stage, l.route)}</span>
                 </button>
               );
             })}

@@ -25,7 +25,7 @@ export function OverviewTiles({ st }: { st: Overview | PersonalStats }) {
         />
       )}
       <StatTile label="Chiên mới tháng này" value={st.newThisMonth} sub="có thông tin liên lạc" />
-      <StatTile label="Đã chia sẻ lẽ thật" value={st.sharedTruth} sub={`đã vào mảnh, trên ${st.total} chiên`} />
+      <StatTile label="Đã chia sẻ lẽ thật" value={st.sharedTruth} sub={`đã bắt đầu nghe, trên ${st.total} chiên`} />
       <StatTile
         label="Tỉ lệ báptem"
         value={pct(rate(st.baptized, st.total))}
