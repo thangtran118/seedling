@@ -20,7 +20,18 @@ import {
   type SessionPhase,
 } from "@/lib/domain";
 import { AutoRefresh } from "@/app/ui/auto-refresh";
-import { ButtonLink, Empty, Loading, PageHeader, PhaseLegend, PhaseMark, Section } from "@/app/ui/kit";
+import {
+  ButtonLink,
+  Empty,
+  Fab,
+  FabStack,
+  HeaderAction,
+  Loading,
+  PageHeader,
+  PhaseLegend,
+  PhaseMark,
+  Section,
+} from "@/app/ui/kit";
 import { firstParam } from "@/app/ui/load";
 import { SessionCard } from "@/app/ui/session-card";
 
@@ -31,11 +42,8 @@ export default function CalendarPage(props: PageProps<"/lich">) {
     <>
       <PageHeader
         title="Lịch khu vực"
-        action={
-          <Link href="/ca/hen" className="rounded-xl bg-accent px-3 py-2 text-sm font-semibold text-on-accent">
-            + Đặt lịch trudo
-          </Link>
-        }
+        actionDesktopOnly
+        action={<HeaderAction href="/ca/hen">+ Đặt lịch trudo</HeaderAction>}
       />
       <Suspense fallback={<Loading />}>
         <Calendar searchParams={props.searchParams} />
@@ -77,6 +85,9 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
   const inMonth = sessions.filter((s) => dayKey(s.startsAt).startsWith(month));
   const count = (p: SessionPhase) => inMonth.filter((s) => sessionPhase(s.state, s.startsAt, now) === p).length;
   const agenda = byDay.get(selected) ?? [];
+  // Booking from the calendar starts on the day being looked at (a past day falls back to the usual default).
+  const planHref = selected >= today ? `/ca/hen?ngay=${selected}` : "/ca/hen";
+  const planLabel = selected > today ? `Đặt lịch ${selected.slice(8)}/${selected.slice(5, 7)}` : "Đặt lịch trudo";
   const next = upcoming.filter((s) => sessionPhase(s.state, s.startsAt, now) === "upcoming").slice(0, 6);
 
   return (
@@ -88,7 +99,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
             <Link
               href={href(addMonths(month, -1), `${addMonths(month, -1)}-01`)}
               aria-label="Tháng trước"
-              className="rounded-full p-2 text-muted hover:bg-sunken"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-sunken hover:text-ink"
             >
               <Chevron dir="left" />
             </Link>
@@ -96,14 +107,14 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
             <Link
               href={href(addMonths(month, 1), `${addMonths(month, 1)}-01`)}
               aria-label="Tháng sau"
-              className="rounded-full p-2 text-muted hover:bg-sunken"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-sunken hover:text-ink"
             >
               <Chevron dir="right" />
             </Link>
             {!(month === today.slice(0, 7) && selected === today) && (
               <Link
                 href={href(today.slice(0, 7), today)}
-                className="ml-auto rounded-full border border-line px-3 py-1 text-sm text-ink hover:bg-sunken"
+                className="ml-auto inline-flex h-9 items-center rounded-full border border-line px-3 text-sm text-ink hover:bg-sunken"
               >
                 Hôm nay
               </Link>
@@ -154,10 +165,13 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
             ) : (
               <Empty>Không có ca nào trong ngày này.</Empty>
             )}
+            {/* Phones book this day from the floating button. */}
             {selected >= today && agenda.length === 0 && (
-              <ButtonLink href="/ca/hen" variant="secondary">
-                Đặt lịch trudo
-              </ButtonLink>
+              <div className="hidden md:block">
+                <ButtonLink href={planHref} variant="secondary">
+                  {planLabel}
+                </ButtonLink>
+              </div>
             )}
           </Section>
 
@@ -170,6 +184,9 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
           </Section>
         </div>
       </div>
+      <FabStack>
+        <Fab href={planHref}>{planLabel}</Fab>
+      </FabStack>
     </>
   );
 }

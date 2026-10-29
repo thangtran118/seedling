@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useTransition, type ReactNode } from "react";
 import { saveListenerAction } from "@/app/actions/listeners";
 import { applyStage, LESSONS, nextLesson, stageLabel, STAGES, stageOf, tapLesson, type Progress } from "@/lib/domain";
-import { StageBadge } from "./kit";
+import { INPUT, StageBadge } from "./kit";
 
 // Listener page edits (stage, mảnh, người đồng hành to add) stay local until the one "Lưu" bar at the bottom.
 type Editor = {
@@ -160,7 +160,7 @@ export function ListenerMainCard({
           <select
             value={stage}
             onChange={(e) => setProgress(applyStage(progress, e.target.value as typeof stage))}
-            className="h-11 rounded-lg border border-line bg-surface px-3 text-base text-ink"
+            className={`${INPUT} h-11`}
           >
             {STAGES.map((s) => (
               <option key={s} value={s}>
@@ -189,7 +189,7 @@ export function CompanionPicker({ choices }: { choices: { id: string; label: str
                 type="button"
                 onClick={() => setAddUserIds(addUserIds.filter((id) => id !== c.id))}
                 aria-label={`Bỏ chọn ${c.label}`}
-                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-dashed border-accent bg-accent/10 pl-3 pr-2.5 text-sm font-medium text-accent"
+                className="inline-flex h-10 items-center gap-1.5 rounded-full border border-dashed border-accent bg-accent/10 pl-3 pr-2.5 text-sm font-medium text-accent"
               >
                 + {c.label}
                 <span aria-hidden className="text-base leading-none">
@@ -204,7 +204,7 @@ export function CompanionPicker({ choices }: { choices: { id: string; label: str
         <select
           value=""
           onChange={(e) => e.target.value && setAddUserIds([...addUserIds, e.target.value])}
-          className="h-11 rounded-lg border border-line bg-surface px-3 text-base text-ink"
+          className={`${INPUT} h-11`}
         >
           <option value="">{picked.length ? "Thêm người nữa…" : "Thêm người đồng hành…"}</option>
           {left.map((c) => (

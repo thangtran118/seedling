@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { changePasswordAction } from "@/app/actions/auth";
-import { Field, FormError, SubmitButton } from "@/app/ui/form";
+import { FormError, SubmitButton } from "@/app/ui/form";
+import { PasswordField } from "@/app/ui/password-field";
 
 export function ChangePasswordForm({ forced, minLength }: { forced: boolean; minLength: number }) {
   const [state, action, pending] = useActionState(changePasswordAction, undefined);
@@ -13,21 +15,27 @@ export function ChangePasswordForm({ forced, minLength }: { forced: boolean; min
           Đây là lần đăng nhập đầu tiên. Hãy đặt mật khẩu riêng của bạn.
         </p>
       )}
-      {!forced && (
-        <Field label="Mật khẩu hiện tại" name="current" type="password" autoComplete="current-password" required />
-      )}
-      <Field
+      {!forced && <PasswordField label="Mật khẩu hiện tại" name="current" autoComplete="current-password" required />}
+      <PasswordField
         label="Mật khẩu mới"
         name="next"
-        type="password"
         autoComplete="new-password"
         minLength={minLength}
         hint={`Ít nhất ${minLength} ký tự, có cả chữ và số.`}
         required
       />
-      <Field label="Nhập lại mật khẩu mới" name="confirm" type="password" autoComplete="new-password" required />
+      <PasswordField label="Nhập lại mật khẩu mới" name="confirm" autoComplete="new-password" required />
       <FormError message={state?.error} />
       <SubmitButton pending={pending}>Lưu mật khẩu</SubmitButton>
+      {/* Opened from the account menu: a way back without saving. */}
+      {!forced && (
+        <Link
+          href="/"
+          className="flex h-11 items-center justify-center text-sm font-semibold text-muted hover:text-ink"
+        >
+          Hủy
+        </Link>
+      )}
     </form>
   );
 }

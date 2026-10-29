@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/access/current-user";
+import { NavHistory } from "@/app/ui/back-link";
 import { BottomNav, SideNav } from "@/app/ui/nav";
 
 // Authenticated screens. The session is read inside a Suspense boundary (Cache Components), and every page
@@ -12,6 +13,9 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
       <main className="flex w-full flex-1 flex-col px-4 pb-40 pt-4 md:pb-10 md:pl-68 md:pr-8 md:pt-8">
         <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 md:max-w-6xl">{children}</div>
       </main>
+      <Suspense fallback={null}>
+        <NavHistory />
+      </Suspense>
       <Suspense fallback={null}>
         <Nav />
       </Suspense>

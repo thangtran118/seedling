@@ -1,7 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, RedirectType } from "next/navigation";
 import * as z from "zod";
 import { requireUser } from "@/lib/access/current-user";
 import {
@@ -64,7 +64,7 @@ export async function createListenerAction(input: ListenerFormInput): Promise<Li
   }
   const result = await guard(() => createListener(user, data));
   if (typeof result !== "string") return result;
-  redirect(`/nguoi-nghe/${result}`);
+  redirect(`/nguoi-nghe/${result}`, RedirectType.replace); // the form page drops out of history: "back" skips it
 }
 
 export async function updateListenerAction(listenerId: string, input: ListenerFormInput): Promise<ListenerFormResult> {
@@ -73,7 +73,7 @@ export async function updateListenerAction(listenerId: string, input: ListenerFo
   if (!data) return { ok: false, error: "Dữ liệu không hợp lệ." };
   const result = await guard(() => updateListener(user, listenerId, data));
   if (result) return result;
-  redirect(`/nguoi-nghe/${listenerId}`);
+  redirect(`/nguoi-nghe/${listenerId}`, RedirectType.replace);
 }
 
 export type SimpleState = { error?: string } | undefined;

@@ -7,9 +7,10 @@ import { listenersForSession, type SessionListener } from "@/lib/access/listener
 import { getSessionDetail } from "@/lib/access/sessions";
 import { dayKey, formatDayLong, formatTime, isClosedStage, isOpenPhase, sessionPhase } from "@/lib/domain";
 import { ActionForm, PendingButton } from "@/app/ui/action-form";
+import { ContactList } from "@/app/ui/contact";
 import {
-  ButtonLink,
   Card,
+  HeaderAction,
   LessonDots,
   Loading,
   Notice,
@@ -52,7 +53,17 @@ async function Detail({
 
   return (
     <>
-      <PageHeader title="Ca trudo" back="/" />
+      <PageHeader
+        title="Ca trudo"
+        back="/lich"
+        action={
+          s.canEdit ? (
+            <HeaderAction href={`/ca/${s.id}/sua`} variant="secondary">
+              Sửa ca
+            </HeaderAction>
+          ) : undefined
+        }
+      />
       {saved && <Notice tone="success">Đã lưu.</Notice>}
       {phase === "cancelled" && <Notice tone="warn">Ca này đã bị hủy. Dữ liệu vẫn được lưu trong lịch sử.</Notice>}
       {phase === "done" && <Notice tone="success">Ca đã hoàn thành và được lưu vào lịch sử của chiên.</Notice>}
@@ -63,6 +74,15 @@ async function Detail({
         </p>
         <PhaseBadge phase={phase} />
       </div>
+
+      {/* The one thing most visitors of someone else's session came to do: keep it above the fold. */}
+      {s.canJoin && (
+        <ActionForm action={joinSessionAction} hidden={{ sessionId: s.id }}>
+          <PendingButton className="h-12 w-full rounded-xl bg-accent font-semibold text-on-accent">
+            Tham gia ca này
+          </PendingButton>
+        </ActionForm>
+      )}
 
       <Section title={s.listeners.length > 1 ? `Chiên (${s.listeners.length})` : "Chiên"}>
         <div className={`grid grid-cols-1 gap-3 ${people.length > 1 ? "md:grid-cols-2" : ""}`}>
@@ -86,14 +106,16 @@ async function Detail({
           </span>
           <div className="flex min-w-0 flex-col gap-1">
             <p className="break-words text-lg font-bold text-ink">{s.locationLabel ?? "Chưa ghi nơi gặp"}</p>
-            {s.mapUrl && (
+            {(s.mapUrl || s.locationLabel) && (
               <a
-                href={s.mapUrl}
+                href={
+                  s.mapUrl ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.locationLabel!)}`
+                }
                 target="_blank"
                 rel="noopener noreferrer"
-                className="self-start text-sm font-medium text-accent underline"
+                className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-accent underline underline-offset-2"
               >
-                Mở Google Maps ↗
+                {s.mapUrl ? "Mở Google Maps ↗" : "Tìm trên Google Maps ↗"}
               </a>
             )}
           </div>
@@ -119,53 +141,34 @@ async function Detail({
         <p className="text-xs text-muted">Người tạo ca: {s.createdBy.name}</p>
       </Section>
 
-      <div className="flex flex-col gap-3">
-        {s.canJoin && (
-          <ActionForm action={joinSessionAction} hidden={{ sessionId: s.id }}>
-            <PendingButton className="h-12 w-full rounded-lg bg-accent font-semibold text-on-accent">
-              Tham gia ca này
-            </PendingButton>
-          </ActionForm>
-        )}
-        {isOpenPhase(phase) && s.isMember && s.members.length > 1 && (
-          <ActionForm action={leaveSessionAction} hidden={{ sessionId: s.id }}>
-            <PendingButton className="h-11 w-full rounded-lg border border-line text-ink">Rời ca</PendingButton>
-          </ActionForm>
-        )}
-        {(s.canEdit || s.canCancel) && (
-          <div className={`grid gap-3 ${s.canEdit && s.canCancel ? "grid-cols-2" : "grid-cols-1"}`}>
-            {s.canEdit && (
-              <ButtonLink href={`/ca/${s.id}/sua`} variant="secondary">
-                Sửa
-              </ButtonLink>
-            )}
-            {s.canCancel && (
-              <ActionForm
-                action={cancelSessionAction}
-                hidden={{ sessionId: s.id }}
-                confirm="Hủy ca này? Ca vẫn được lưu trong lịch sử với trạng thái “Đã hủy”."
-              >
-                <PendingButton className="h-12 w-full rounded-lg border border-line text-danger">Hủy ca</PendingButton>
-              </ActionForm>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Leaving and cancelling are rarer and harder to undo: at the end, outlined, never next to "Tham gia". */}
+      {((isOpenPhase(phase) && s.isMember && s.members.length > 1) || s.canCancel) && (
+        <div className="mt-2 flex flex-col gap-3 border-t border-line pt-5">
+          {isOpenPhase(phase) && s.isMember && s.members.length > 1 && (
+            <ActionForm action={leaveSessionAction} hidden={{ sessionId: s.id }} confirm="Rời ca này?">
+              <PendingButton className="h-12 w-full rounded-xl border border-line bg-surface text-ink hover:bg-sunken">
+                Rời ca
+              </PendingButton>
+            </ActionForm>
+          )}
+          {s.canCancel && (
+            <ActionForm
+              action={cancelSessionAction}
+              hidden={{ sessionId: s.id }}
+              confirm="Hủy ca này? Ca vẫn được lưu trong lịch sử với trạng thái “Đã hủy”."
+            >
+              <PendingButton className="h-12 w-full rounded-xl border border-danger/40 bg-surface text-danger hover:bg-danger/10">
+                Hủy ca
+              </PendingButton>
+            </ActionForm>
+          )}
+        </div>
+      )}
     </>
   );
 }
 
-const CONTACTS = [
-  ["phone", "SĐT"],
-  ["zalo", "Zalo"],
-  ["facebook", "Facebook"],
-  ["telegram", "Telegram"],
-  ["hometown", "Quê quán"],
-] as const;
-
 function ListenerPanel({ l }: { l: SessionListener }) {
-  const p = l.private;
-  const contacts = p ? CONTACTS.filter(([k]) => p[k]) : [];
   return (
     <article className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
       <div className="flex items-start justify-between gap-3">
@@ -183,48 +186,14 @@ function ListenerPanel({ l }: { l: SessionListener }) {
         <ProgressNote lessons={l.lessons} stage={l.stage} />
       </div>
 
-      {p ? (
-        <dl className="flex flex-col gap-1.5 border-t border-line pt-3 text-sm">
-          {contacts.length === 0 && <p className="text-muted">Chưa có thông tin liên hệ.</p>}
-          {contacts.map(([k, label]) => (
-            <div key={k} className="flex justify-between gap-3">
-              <dt className="text-muted">{label}</dt>
-              <dd className="break-all text-right font-medium text-ink">
-                {k === "phone" ? (
-                  <a href={`tel:${p.phone}`} className="text-accent underline">
-                    {p.phone}
-                  </a>
-                ) : (
-                  <Linkified text={p[k]!} />
-                )}
-              </dd>
-            </div>
-          ))}
-          {p.notes && (
-            <div className="mt-1">
-              <dt className="text-muted">Ghi chú</dt>
-              <dd className="whitespace-pre-wrap text-ink">{p.notes}</dd>
-            </div>
+      {l.private && (
+        <div className="flex flex-col gap-2 border-t border-line pt-3">
+          <ContactList p={l.private} />
+          {l.private.notes && (
+            <p className="whitespace-pre-wrap rounded-xl bg-sunken px-3 py-2 text-sm text-ink">{l.private.notes}</p>
           )}
-        </dl>
-      ) : null}
-    </article>
-  );
-}
-
-// Plain text with http(s) links made clickable (people paste profile links into the contact fields).
-function Linkified({ text }: { text: string }) {
-  return (
-    <>
-      {text.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
-        /^https?:\/\//.test(part) ? (
-          <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="break-all text-accent underline">
-            {part}
-          </a>
-        ) : (
-          part
-        ),
+        </div>
       )}
-    </>
+    </article>
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import type { ListenerFormInput, ListenerFormResult } from "@/app/actions/listeners";
 import { applyStage, stageLabel, STAGES, type Stage } from "@/lib/domain";
+import { INPUT } from "./kit";
 
 type Values = {
   name: string;
@@ -17,7 +18,7 @@ type Values = {
   notes: string;
 };
 
-const input = "h-12 rounded-lg border border-line bg-surface px-3 text-base text-ink";
+const input = `${INPUT} h-12`;
 
 // Controlled inputs + direct action call (not <form action>): a "possible duplicate" answer must not wipe the form.
 export function ListenerForm({
@@ -66,13 +67,34 @@ export function ListenerForm({
       }}
     >
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-semibold text-ink">Tên *</span>
-        <input value={v.name} onChange={set("name")} required maxLength={100} className={input} />
+        <span className="text-sm font-semibold text-ink">
+          Tên{" "}
+          <span className="text-danger" aria-label="bắt buộc">
+            *
+          </span>
+        </span>
+        <input
+          value={v.name}
+          onChange={set("name")}
+          required
+          maxLength={100}
+          autoComplete="off"
+          autoFocus={mode === "create"}
+          className={input}
+        />
       </label>
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-semibold text-ink">Năm sinh</span>
-          <input value={v.birthYear} onChange={set("birthYear")} inputMode="numeric" maxLength={4} className={input} />
+          <input
+            value={v.birthYear}
+            onChange={set("birthYear")}
+            inputMode="numeric"
+            pattern="[0-9]{4}"
+            maxLength={4}
+            placeholder="VD: 1998"
+            className={input}
+          />
         </label>
         {mode === "create" && (
           <label className="flex flex-col gap-1.5">
@@ -92,27 +114,29 @@ export function ListenerForm({
         <legend className="px-1 text-sm font-semibold text-ink">Thông tin riêng tư</legend>
         {(
           [
-            ["phone", "Số điện thoại", "tel"],
-            ["hometown", "Quê quán", "text"],
-            ["facebook", "Facebook", "text"],
-            ["zalo", "Zalo", "text"],
-            ["telegram", "Telegram", "text"],
+            ["phone", "Số điện thoại", "tel", ""],
+            ["zalo", "Zalo", "text", "SĐT hoặc link"],
+            ["facebook", "Facebook", "text", "Link trang cá nhân"],
+            ["telegram", "Telegram", "text", "@username"],
+            ["hometown", "Quê quán", "text", ""],
           ] as const
-        ).map(([key, label, type]) => (
+        ).map(([key, label, type, placeholder]) => (
           <label key={key} className="flex flex-col gap-1.5">
             <span className="text-sm text-ink">{label}</span>
-            <input value={v[key]} onChange={set(key)} type={type} className={input} />
+            <input
+              value={v[key]}
+              onChange={set(key)}
+              type={type}
+              inputMode={type === "tel" ? "tel" : undefined}
+              placeholder={placeholder || undefined}
+              autoComplete="off"
+              className={input}
+            />
           </label>
         ))}
         <label className="flex flex-col gap-1.5">
           <span className="text-sm text-ink">Ghi chú (sở thích, thói quen…)</span>
-          <textarea
-            value={v.notes}
-            onChange={set("notes")}
-            rows={3}
-            maxLength={2000}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-base text-ink"
-          />
+          <textarea value={v.notes} onChange={set("notes")} rows={3} maxLength={2000} className={`${INPUT} py-2`} />
         </label>
       </fieldset>
 
@@ -133,7 +157,7 @@ export function ListenerForm({
             type="button"
             disabled={pending}
             onClick={() => send(true)}
-            className="h-10 self-start rounded-lg border border-line bg-surface px-3"
+            className="h-11 self-start rounded-lg border border-line bg-surface px-3 font-semibold"
           >
             Không phải, vẫn tạo người mới
           </button>
@@ -146,8 +170,8 @@ export function ListenerForm({
       )}
       <button
         type="submit"
-        disabled={pending || !v.name.trim()}
-        className="h-12 rounded-lg bg-accent text-base font-semibold text-on-accent disabled:opacity-50"
+        disabled={pending}
+        className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] h-12 rounded-xl bg-accent text-base font-semibold text-on-accent shadow-lg shadow-black/15 disabled:opacity-60 md:bottom-6"
       >
         {pending ? "Đang lưu…" : mode === "create" ? "Thêm chiên" : "Lưu"}
       </button>
