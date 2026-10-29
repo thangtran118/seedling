@@ -103,7 +103,9 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
         <Section
           title={`Sắp tới · ${PLANNED_DAYS} ngày`}
           aside={
-            <Link href="/lich" className="inline-flex min-h-11 items-center text-sm font-semibold text-accent">
+            // -my-3.5: keep the 44px tap target without making this header taller than "Hôm nay"'s, so both
+            // columns start on the same line on desktop.
+            <Link href="/lich" className="-my-3.5 inline-flex min-h-11 items-center text-sm font-semibold text-accent">
               Mở lịch →
             </Link>
           }
