@@ -3,33 +3,46 @@ import { randomInt } from "node:crypto";
 import { hash } from "@node-rs/argon2";
 import { and, asc, eq, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { listenerLinks, sessionMembers, users } from "@/db/schema";
+import { areas, listenerLinks, sessionMembers, users } from "@/db/schema";
 import { normalizePhone } from "@/lib/phone";
+import { loadAreaInRegion } from "./areas";
 import { revokeAllSessions, type SessionUser } from "./auth";
-import { forbiddenError, invalidError, notFoundError } from "./errors";
+import { invalidError, notFoundError } from "./errors";
+import { requireCanManageMember, requireLeader, requireLeadsArea } from "./scope";
 
 export const TEMP_PASSWORD_TTL_MS = 72 * 60 * 60 * 1000;
 
-export type AreaMember = { id: number; name: string; role: "member" | "area_leader" };
+export type RegionMember = {
+  id: number;
+  name: string;
+  role: SessionUser["role"];
+  area: { id: number; name: string };
+};
 
-export type MemberAdminView = AreaMember & {
+export type MemberAdminView = Omit<RegionMember, "area"> & {
   phone: string;
   active: boolean;
   locked: boolean;
   mustChangePassword: boolean;
 };
 
-// Active people in the viewer's area, for "người đi cùng" and "thêm người đồng hành" pickers.
-export async function listAreaMembers(viewer: SessionUser): Promise<AreaMember[]> {
-  return db
-    .select({ id: users.id, name: users.name, role: users.role })
-    .from(users)
-    .where(and(eq(users.areaId, viewer.areaId), eq(users.active, true)))
-    .orderBy(asc(users.name));
-}
+// A person's name in a picker, with their area when it is not the viewer's.
+export const memberLabel = (viewer: SessionUser, m: RegionMember) =>
+  m.area.id === viewer.areaId ? m.name : `${m.name} · ${m.area.name}`;
 
-function requireLeader(viewer: SessionUser) {
-  if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng mới làm được việc này.");
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Active people of the whole region, the viewer's own area first, for the "người đi cùng" and "thêm người đồng hành"
+// pickers: trudo across areas of the region is allowed.
+export async function listRegionMembers(viewer: SessionUser): Promise<RegionMember[]> {
+  const rows = await db
+    .select({ id: users.id, name: users.name, role: users.role, areaId: areas.id, areaName: areas.name })
+    .from(users)
+    .innerJoin(areas, eq(areas.id, users.areaId))
+    .where(and(eq(users.regionId, viewer.regionId), eq(users.active, true)))
+    .orderBy(asc(areas.name), asc(users.name));
+  const people = rows.map(({ areaId, areaName, ...u }) => ({ ...u, area: { id: areaId, name: areaName } }));
+  return [...people.filter((p) => p.area.id === viewer.areaId), ...people.filter((p) => p.area.id !== viewer.areaId)];
 }
 
 // Readable temporary password: 4 letters + 4 digits, no ambiguous characters.
@@ -39,16 +52,21 @@ export function generateTempPassword() {
   return pick(letters, 4) + pick("23456789", 4);
 }
 
+// A member account the viewer may manage: a leader of that person's area; an area leader's account only by the
+// region leader (scope.canManageMember).
 async function loadMember(viewer: SessionUser, userId: number) {
   requireLeader(viewer);
   const [user] = await db.select().from(users).where(eq(users.id, userId));
-  if (!user || user.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy thành viên.");
+  if (!user) throw notFoundError("Không tìm thấy thành viên.");
+  requireCanManageMember(viewer, user);
   return user;
 }
 
-export async function listMembersForAdmin(viewer: SessionUser): Promise<MemberAdminView[]> {
+// The accounts of one area (the viewer's own by default), for its leaders.
+export async function listMembersForAdmin(viewer: SessionUser, areaId = viewer.areaId): Promise<MemberAdminView[]> {
   requireLeader(viewer);
-  const rows = await db.select().from(users).where(eq(users.areaId, viewer.areaId)).orderBy(asc(users.name));
+  requireLeadsArea(viewer, { areaId, regionId: (await loadAreaInRegion(viewer, areaId)).regionId });
+  const rows = await db.select().from(users).where(eq(users.areaId, areaId)).orderBy(asc(users.name));
   return rows.map((u) => ({
     id: u.id,
     name: u.name,
@@ -60,27 +78,45 @@ export async function listMembersForAdmin(viewer: SessionUser): Promise<MemberAd
   }));
 }
 
+// Inserts a member account of `area` with a temporary password (regions.ts reuses it for a new area leader).
 // Returns the temporary password exactly once; it is never stored in plain text.
-export async function createMember(viewer: SessionUser, input: { name: string; phone: string }) {
-  requireLeader(viewer);
+export async function insertMember(
+  tx: Tx,
+  viewer: SessionUser,
+  area: { id: number; regionId: number },
+  input: { name: string; phone: string },
+) {
   const name = input.name.trim();
   if (!name || name.length > 100) throw invalidError("Tên không hợp lệ.");
   const phone = normalizePhone(input.phone);
   if (!phone) throw invalidError("Số điện thoại không hợp lệ.");
-  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.phone, phone));
+  const [existing] = await tx.select({ id: users.id }).from(users).where(eq(users.phone, phone));
   if (existing) throw invalidError("Số điện thoại này đã có tài khoản.");
 
   const tempPassword = generateTempPassword();
-  await db.insert(users).values({
-    name,
-    phone,
-    areaId: viewer.areaId,
-    role: "member",
-    passwordHash: await hash(tempPassword),
-    mustChangePassword: true,
-    tempPasswordExpiresAt: new Date(Date.now() + TEMP_PASSWORD_TTL_MS),
-    createdBy: viewer.id,
-  });
+  const [row] = await tx
+    .insert(users)
+    .values({
+      name,
+      phone,
+      areaId: area.id,
+      regionId: area.regionId,
+      role: "member",
+      passwordHash: await hash(tempPassword),
+      mustChangePassword: true,
+      tempPasswordExpiresAt: new Date(Date.now() + TEMP_PASSWORD_TTL_MS),
+      createdBy: viewer.id,
+    })
+    .returning({ id: users.id });
+  return { id: row.id, phone, tempPassword };
+}
+
+// A leader adds a member to an area they lead (an area leader: their own; the region leader: any area of the region).
+export async function createMember(viewer: SessionUser, input: { name: string; phone: string; areaId?: number }) {
+  requireLeader(viewer);
+  const area = await loadAreaInRegion(viewer, input.areaId ?? viewer.areaId);
+  requireLeadsArea(viewer, { areaId: area.id, regionId: area.regionId });
+  const { phone, tempPassword } = await db.transaction((tx) => insertMember(tx, viewer, area, input));
   return { phone, tempPassword };
 }
 

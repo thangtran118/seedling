@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "tsx --test src/**/*.test.ts",
     "typecheck": "next typegen && tsc --noEmit",
     "db:up": "docker compose up -d db",
     "db:generate": "drizzle-kit generate",

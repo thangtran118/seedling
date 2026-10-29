@@ -14,6 +14,7 @@ import {
   WEEKDAY_SHORT,
   weekdayIndex,
 } from "@/lib/domain";
+import { AreaTag } from "./area-tag";
 import { ActionForm, PendingButton } from "./action-form";
 import { KindIcon, PHASE_TONE, PhaseBadge } from "./kit";
 
@@ -151,6 +152,11 @@ export function SessionCard({
             <Row label="Địa điểm" empty={!s.locationLabel}>
               {s.locationLabel ?? "Chưa ghi"}
             </Row>
+            {s.otherArea && (
+              <div className="mt-1">
+                <AreaTag name={s.otherArea} />
+              </div>
+            )}
           </div>
           {note && <p className="mt-1 text-sm font-medium text-accent">{note}</p>}
         </div>

@@ -4,6 +4,7 @@
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   pgEnum,
@@ -13,14 +14,19 @@ import {
   smallint,
   text,
   timestamp,
+  unique,
+  uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 const id = () => integer("id").primaryKey().generatedAlwaysAsIdentity();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
-export const roleEnum = pgEnum("role", ["member", "area_leader"]);
+// region_leader (địa vực trưởng) is also the leader of their own home area. It is only ever written by the operator
+// CLI (scripts/admin.ts region-leader); no SQL in a migration may name it (see drizzle/0011_regions.sql).
+export const roleEnum = pgEnum("role", ["member", "area_leader", "region_leader"]);
 export const manualStatusEnum = pgEnum("manual_status", ["moi_quen", "goi_mo", "baptem", "tu_choi"]);
 export const sessionStateEnum = pgEnum("session_state", ["planned", "cancelled"]);
 // visit: meeting chosen listeners. outreach: going out to meet new people at a place (gõ cửa…), with no listener.
@@ -28,29 +34,62 @@ export const sessionKindEnum = pgEnum("session_kind", ["visit", "outreach"]);
 // Lộ trình nghe: Mảnh 1-7, B1-B12 or F1-F5 (domain.ts ROUTES).
 export const listeningRouteEnum = pgEnum("listening_route", ["manh", "b", "f"]);
 
-export const areas = pgTable("areas", {
+// Địa vực: a group of areas whose members trudo together. One region today; the table is there to grow into more.
+export const regions = pgTable("regions", {
   id: id(),
   name: varchar("name", { length: 100 }).notNull(),
   createdAt: createdAt(),
 });
 
-export const users = pgTable("users", {
-  id: id(),
-  phone: varchar("phone", { length: 20 }).notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
-  name: varchar("name", { length: 100 }).notNull(),
-  areaId: integer("area_id")
-    .notNull()
-    .references(() => areas.id),
-  role: roleEnum("role").notNull().default("member"),
-  mustChangePassword: boolean("must_change_password").notNull().default(true),
-  tempPasswordExpiresAt: timestamp("temp_password_expires_at", { withTimezone: true }),
-  failedLogins: integer("failed_logins").notNull().default(0),
-  lockedAt: timestamp("locked_at", { withTimezone: true }),
-  createdBy: integer("created_by"),
-  active: boolean("active").notNull().default(true),
-  createdAt: createdAt(),
-});
+export const areas = pgTable(
+  "areas",
+  {
+    id: id(),
+    regionId: integer("region_id")
+      .notNull()
+      .references(() => regions.id),
+    name: varchar("name", { length: 100 }).notNull(),
+    createdAt: createdAt(),
+  },
+  // Target of the (area_id, region_id) foreign keys below.
+  (t) => [unique("areas_id_region").on(t.id, t.regionId)],
+);
+
+// users, listeners and sessions carry region_id next to area_id so region-wide reads filter on one column. The
+// composite foreign key keeps the pair equal to the area's own: it cannot drift, and moving an area to another region
+// cascades.
+const areaRegionFk = (name: string, t: { areaId: AnyPgColumn; regionId: AnyPgColumn }) =>
+  foreignKey({ name, columns: [t.areaId, t.regionId], foreignColumns: [areas.id, areas.regionId] }).onUpdate("cascade");
+
+export const users = pgTable(
+  "users",
+  {
+    id: id(),
+    phone: varchar("phone", { length: 20 }).notNull().unique(),
+    passwordHash: text("password_hash").notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    areaId: integer("area_id")
+      .notNull()
+      .references(() => areas.id),
+    regionId: integer("region_id").notNull(),
+    role: roleEnum("role").notNull().default("member"),
+    mustChangePassword: boolean("must_change_password").notNull().default(true),
+    tempPasswordExpiresAt: timestamp("temp_password_expires_at", { withTimezone: true }),
+    failedLogins: integer("failed_logins").notNull().default(0),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    createdBy: integer("created_by"),
+    active: boolean("active").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    areaRegionFk("users_area_region_fk", t),
+    // One leader per area (the region leader leads their home area). Written as "not member" so the predicate never
+    // names region_leader, which a migration adding that enum value could not use in the same transaction.
+    uniqueIndex("one_leader_per_area")
+      .on(t.areaId)
+      .where(sql`${t.role} <> 'member' and ${t.active}`),
+  ],
+);
 
 export const authSessions = pgTable("auth_sessions", {
   id: varchar("id", { length: 64 }).primaryKey(), // sha256 of the cookie token
@@ -77,6 +116,7 @@ export const listeners = pgTable(
     areaId: integer("area_id")
       .notNull()
       .references(() => areas.id),
+    regionId: integer("region_id").notNull(),
     name: varchar("name", { length: 100 }).notNull(),
     birthYear: smallint("birth_year"),
     manualStatus: manualStatusEnum("manual_status").notNull().default("moi_quen"),
@@ -94,6 +134,7 @@ export const listeners = pgTable(
   },
   // Upper bound per route; keep in step with domain.ts ROUTES.
   (t) => [
+    areaRegionFk("listeners_area_region_fk", t),
     check(
       "lessons_reached_range",
       sql`${t.lessonsReached} >= 0 and ${t.lessonsReached} <= case ${t.route} when 'b' then 12 when 'f' then 5 else 7 end`,
@@ -118,26 +159,31 @@ export const listenerLinks = pgTable(
   (t) => [primaryKey({ columns: [t.listenerId, t.userId] })],
 );
 
-export const sessions = pgTable("sessions", {
-  id: id(),
-  areaId: integer("area_id")
-    .notNull()
-    .references(() => areas.id),
-  createdBy: integer("created_by")
-    .notNull()
-    .references(() => users.id),
-  kind: sessionKindEnum("kind").notNull().default("visit"),
-  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
-  locationLabel: varchar("location_label", { length: 80 }),
-  mapUrl: varchar("map_url", { length: 500 }),
-  state: sessionStateEnum("state").notNull(),
-  cancelledBy: integer("cancelled_by").references(() => users.id),
-  // AE chia sẻ chính: one member of a visit session who takes it on themselves (nobody assigns it to someone else).
-  // Null until someone does; cleared when that member leaves the session.
-  sharerId: integer("sharer_id").references(() => users.id),
-  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
-  createdAt: createdAt(),
-});
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: id(),
+    areaId: integer("area_id")
+      .notNull()
+      .references(() => areas.id),
+    regionId: integer("region_id").notNull(),
+    createdBy: integer("created_by")
+      .notNull()
+      .references(() => users.id),
+    kind: sessionKindEnum("kind").notNull().default("visit"),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    locationLabel: varchar("location_label", { length: 80 }),
+    mapUrl: varchar("map_url", { length: 500 }),
+    state: sessionStateEnum("state").notNull(),
+    cancelledBy: integer("cancelled_by").references(() => users.id),
+    // AE chia sẻ chính: one member of a visit session who takes it on themselves (nobody assigns it to someone else).
+    // Null until someone does; cleared when that member leaves the session.
+    sharerId: integer("sharer_id").references(() => users.id),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [areaRegionFk("sessions_area_region_fk", t)],
+);
 
 export const sessionMembers = pgTable(
   "session_members",

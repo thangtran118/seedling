@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { listRegionAreas } from "@/lib/access/areas";
 import { requireUser } from "@/lib/access/current-user";
-import { listAreaSessionsBetween, type SessionListItem } from "@/lib/access/sessions";
+import { listSessionsBetween, type SessionListItem } from "@/lib/access/sessions";
 import {
   addDays,
   dayKey,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/domain";
 import { AutoRefresh } from "@/app/ui/auto-refresh";
 import { Empty, Fab, FabStack, HeaderAction, Loading, Section, TextLink } from "@/app/ui/kit";
+import { resolveView, sessionInView, viewCounts, viewQuery, ViewTabs } from "@/app/ui/area-scope";
 import { firstParam } from "@/app/ui/load";
 import { SessionCard } from "@/app/ui/session-card";
 
@@ -33,24 +35,25 @@ export default function HomePage(props: PageProps<"/">) {
 
 async function Home({ searchParams }: { searchParams: PageProps<"/">["searchParams"] }) {
   const user = await requireUser();
-  const onlyMine = firstParam((await searchParams)["cua-toi"]) === "1";
+  const sp = await searchParams;
   const now = new Date();
   const today = dayKey(now);
   const tomorrow = addDays(today, 1);
   // Include sessions that started late last night and are still inside their live window.
   const from = new Date(Math.min(dayStart(today).getTime(), now.getTime() - SESSION_LIVE_MS));
-  const [todaysAll, aheadAll] = await Promise.all([
-    listAreaSessionsBetween(user, from, dayStart(tomorrow)),
-    listAreaSessionsBetween(user, dayStart(tomorrow), dayStart(addDays(tomorrow, PLANNED_DAYS))),
+  const [todaysAll, aheadAll, areas] = await Promise.all([
+    listSessionsBetween(user, from, dayStart(tomorrow)),
+    listSessionsBetween(user, dayStart(tomorrow), dayStart(addDays(tomorrow, PLANNED_DAYS))),
+    listRegionAreas(user),
   ]);
+  // Default: the viewer's own area, cross-area sessions it is part of included.
+  const scope = resolveView(user, areas, { xem: firstParam(sp.xem), kv: firstParam(sp.kv) }, "khu-vuc");
   const plannedAll = aheadAll.filter((s) => s.state === "planned");
-  const mine = (s: SessionListItem) => s.isMember;
-  const todays = onlyMine ? todaysAll.filter(mine) : todaysAll;
-  const planned = onlyMine ? plannedAll.filter(mine) : plannedAll;
+  const todays = todaysAll.filter((s) => sessionInView(scope, s));
+  const planned = plannedAll.filter((s) => sessionInView(scope, s));
   const live = todays.filter((s) => sessionPhase(s.state, s.startsAt, now) === "live");
   const next = todays.find((s) => sessionPhase(s.state, s.startsAt, now) === "upcoming");
-  const mineCount = todaysAll.filter(mine).length + plannedAll.filter(mine).length;
-  const allCount = todaysAll.length + plannedAll.length;
+  const counts = viewCounts(user, areas, scope, [...todaysAll, ...plannedAll], sessionInView);
 
   return (
     <>
@@ -76,10 +79,7 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
         <figcaption className="mt-1 text-xs text-muted">Khải huyền 22:12</figcaption>
       </figure>
 
-      <nav aria-label="Lọc ca" className="flex gap-2">
-        <FilterChip href="/" on={!onlyMine} label="Cả khu vực" count={allCount} />
-        <FilterChip href="/?cua-toi=1" on={onlyMine} label="Ca của tôi" count={mineCount} />
-      </nav>
+      <ViewTabs user={user} areas={areas} scope={scope} counts={counts} href={(n) => `/${viewQuery(scope, n)}`} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section title={live.length ? `Hôm nay · ${live.length} đang diễn ra` : "Hôm nay"}>
@@ -90,7 +90,11 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
               ))}
             </div>
           ) : (
-            <Empty>{onlyMine ? "Hôm nay bạn không có ca nào." : "Hôm nay khu vực chưa có ca nào."}</Empty>
+            <Empty>
+              {scope.view === "cua-toi"
+                ? "Hôm nay bạn không có ca nào."
+                : `Hôm nay ${scope.view === "khu-vuc" ? "khu vực" : "địa vực"} chưa có ca nào.`}
+            </Empty>
           )}
           {live.length === 0 && next && (
             <p className="text-sm text-muted">
@@ -114,7 +118,7 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
             <PlannedByDay sessions={planned} tomorrow={tomorrow} now={now} />
           ) : (
             <Empty action={<TextLink href="/ca/hen">+ Đặt lịch trudo</TextLink>}>
-              {onlyMine
+              {scope.view === "cua-toi"
                 ? `Bạn chưa có ca nào trong ${PLANNED_DAYS} ngày tới.`
                 : `Chưa có ca nào được hẹn trong ${PLANNED_DAYS} ngày tới.`}
             </Empty>
@@ -129,22 +133,6 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
         </Fab>
       </FabStack>
     </>
-  );
-}
-
-function FilterChip({ href, on, label, count }: { href: string; on: boolean; label: string; count: number }) {
-  return (
-    <Link
-      href={href}
-      scroll={false}
-      aria-current={on ? "true" : undefined}
-      className={`inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm transition-colors ${
-        on ? "bg-accent font-semibold text-on-accent" : "border border-line bg-surface text-ink hover:bg-sunken"
-      }`}
-    >
-      {label}
-      <span className={`tabular-nums ${on ? "opacity-80" : "text-muted"}`}>{count}</span>
-    </Link>
   );
 }
 

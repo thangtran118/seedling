@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireUser } from "@/lib/access/current-user";
-import { listAreaSessionsBetween, listAreaUpcoming, type SessionListItem } from "@/lib/access/sessions";
+import { listRegionAreas } from "@/lib/access/areas";
+import { listSessionsBetween, listUpcoming, type SessionListItem } from "@/lib/access/sessions";
 import {
   addDays,
   addMonths,
@@ -32,16 +33,17 @@ import {
   PhaseMark,
   Section,
 } from "@/app/ui/kit";
+import { resolveView, sessionInView, viewQuery, ViewTabs, type ViewScope } from "@/app/ui/area-scope";
 import { firstParam } from "@/app/ui/load";
 import { SessionCard } from "@/app/ui/session-card";
 
-export const metadata: Metadata = { title: "Lịch khu vực · Seedling" };
+export const metadata: Metadata = { title: "Lịch · Seedling" };
 
 export default function CalendarPage(props: PageProps<"/lich">) {
   return (
     <>
       <PageHeader
-        title="Lịch khu vực"
+        title="Lịch"
         actionDesktopOnly
         action={<HeaderAction href="/ca/hen">+ Đặt lịch trudo</HeaderAction>}
       />
@@ -52,7 +54,9 @@ export default function CalendarPage(props: PageProps<"/lich">) {
   );
 }
 
-const href = (month: string, day: string) => `/lich?thang=${month}&ngay=${day}`;
+// The Của tôi / Khu vực / Địa vực tab (area-scope.tsx) is kept while moving through months and days.
+const href = (scope: ViewScope, month: string, day: string, next: Parameters<typeof viewQuery>[1] = {}) =>
+  `/lich${viewQuery(scope, next, { thang: month, ngay: day })}`;
 
 function joinNote(s: SessionListItem, phase: SessionPhase) {
   if (!isOpenPhase(phase)) return undefined;
@@ -69,13 +73,18 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
   const month = askedMonth ?? askedDay?.slice(0, 7) ?? today.slice(0, 7);
   const selected = askedDay && askedDay.startsWith(month) ? askedDay : today.startsWith(month) ? today : `${month}-01`;
 
+  const areas = await listRegionAreas(user);
+  const scope = resolveView(user, areas, { xem: firstParam(sp.xem), kv: firstParam(sp.kv) }, "khu-vuc");
+
   const weeks = monthGrid(month);
   const first = weeks[0][0];
   const last = weeks[weeks.length - 1][6];
-  const [sessions, upcoming] = await Promise.all([
-    listAreaSessionsBetween(user, dayStart(first), dayStart(addDays(last, 1))),
-    listAreaUpcoming(user),
+  const [monthAll, upcomingAll] = await Promise.all([
+    listSessionsBetween(user, dayStart(first), dayStart(addDays(last, 1))),
+    listUpcoming(user),
   ]);
+  const sessions = monthAll.filter((s) => sessionInView(scope, s));
+  const upcoming = upcomingAll.filter((s) => sessionInView(scope, s));
 
   const byDay = new Map<string, SessionListItem[]>();
   for (const s of sessions) {
@@ -93,11 +102,12 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
   return (
     <>
       <AutoRefresh />
+      <ViewTabs user={user} areas={areas} scope={scope} href={(n) => href(scope, month, selected, n)} />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <Link
-              href={href(addMonths(month, -1), `${addMonths(month, -1)}-01`)}
+              href={href(scope, addMonths(month, -1), `${addMonths(month, -1)}-01`)}
               aria-label="Tháng trước"
               className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-sunken hover:text-ink"
             >
@@ -105,7 +115,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
             </Link>
             <h2 className="min-w-36 text-center text-lg font-bold text-ink">{formatMonth(month)}</h2>
             <Link
-              href={href(addMonths(month, 1), `${addMonths(month, 1)}-01`)}
+              href={href(scope, addMonths(month, 1), `${addMonths(month, 1)}-01`)}
               aria-label="Tháng sau"
               className="inline-flex h-11 w-11 items-center justify-center rounded-full text-muted hover:bg-sunken hover:text-ink"
             >
@@ -113,7 +123,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
             </Link>
             {!(month === today.slice(0, 7) && selected === today) && (
               <Link
-                href={href(today.slice(0, 7), today)}
+                href={href(scope, today.slice(0, 7), today)}
                 className="ml-auto inline-flex h-9 items-center rounded-full border border-line px-3 text-sm text-ink hover:bg-sunken"
               >
                 Hôm nay
@@ -147,6 +157,7 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
                     isToday={k === today}
                     isSelected={k === selected}
                     now={now}
+                    scope={scope}
                   />
                 ))}
               </div>
@@ -175,7 +186,15 @@ async function Calendar({ searchParams }: { searchParams: PageProps<"/lich">["se
             )}
           </Section>
 
-          <Section title="Sắp tới trong khu vực">
+          <Section
+            title={
+              scope.view === "cua-toi"
+                ? "Ca sắp tới của tôi"
+                : scope.view === "khu-vuc"
+                  ? "Sắp tới trong khu vực"
+                  : "Sắp tới trong địa vực"
+            }
+          >
             {next.length ? (
               next.map((s) => <SessionCard key={s.id} s={s} now={now} note={joinNote(s, "upcoming")} />)
             ) : (
@@ -198,7 +217,9 @@ function DayCell({
   isToday,
   isSelected,
   now,
+  scope,
 }: {
+  scope: ViewScope;
   day: string;
   month: string;
   sessions: SessionListItem[];
@@ -211,7 +232,7 @@ function DayCell({
   const hasLive = phases.includes("live");
   return (
     <Link
-      href={href(month, day)}
+      href={href(scope, month, day)}
       scroll={false}
       aria-label={`${day.slice(8)}/${day.slice(5, 7)}: ${sessions.length} ca${hasLive ? ", có ca đang diễn ra" : ""}`}
       aria-current={isSelected ? "date" : undefined}

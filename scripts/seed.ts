@@ -17,34 +17,39 @@ async function wipe() {
   }
   await sqlClient`truncate private.listener_notes, private.session_private, private.listener_private, pii_access_log,
     session_listeners, session_members, sessions, listener_links, listeners,
-    login_attempts, auth_sessions, users, areas cascade`;
+    login_attempts, auth_sessions, users, areas, regions cascade`;
 }
 
 async function main() {
   await wipe();
   const passwordHash = await hash(DEV_PASSWORD);
 
-  const [area] = await db.insert(s.areas).values({ name: "Khu vực Thử nghiệm" }).returning();
+  const [region] = await db.insert(s.regions).values({ name: "Địa vực Thử nghiệm" }).returning();
+  const [area, areaB] = await db
+    .insert(s.areas)
+    .values([
+      { name: "Khu vực Thử nghiệm", regionId: region.id },
+      { name: "Khu vực B", regionId: region.id },
+    ])
+    .returning();
+  const inA = { areaId: area.id, regionId: region.id };
+  const inB = { areaId: areaB.id, regionId: region.id };
 
+  // The region leader leads area B, their home area.
   const people = [
-    { name: "Trưởng Khu Vực", phone: "0900000001", role: "area_leader" as const },
-    { name: "ae An", phone: "0900000002", role: "member" as const },
-    { name: "ae Bình", phone: "0900000003", role: "member" as const },
-    { name: "ae Chi", phone: "0900000004", role: "member" as const },
-    { name: "ae Dũng", phone: "0900000005", role: "member" as const },
+    { name: "Trưởng Khu Vực", phone: "0900000001", role: "area_leader" as const, ...inA },
+    { name: "ae An", phone: "0900000002", role: "member" as const, ...inA },
+    { name: "ae Bình", phone: "0900000003", role: "member" as const, ...inA },
+    { name: "ae Chi", phone: "0900000004", role: "member" as const, ...inA },
+    { name: "ae Dũng", phone: "0900000005", role: "member" as const, ...inA },
+    { name: "Địa Vực Trưởng", phone: "0900000006", role: "region_leader" as const, ...inB },
+    { name: "ae Em", phone: "0900000007", role: "member" as const, ...inB },
   ];
   const users = await db
     .insert(s.users)
-    .values(
-      people.map((p) => ({
-        ...p,
-        passwordHash,
-        areaId: area.id,
-        mustChangePassword: false,
-      })),
-    )
+    .values(people.map((p) => ({ ...p, passwordHash, mustChangePassword: false })))
     .returning();
-  const [leader, an, binh, chi, dung] = users;
+  const [leader, an, binh, chi, dung, regionLeader, em] = users;
 
   // added / heard / baptized: days ago, for the monthly stats history.
   const listenerSeed = [
@@ -104,7 +109,7 @@ async function main() {
     const [row] = await db
       .insert(s.listeners)
       .values({
-        areaId: area.id,
+        ...inA,
         name: l.name,
         birthYear: l.birthYear,
         manualStatus: l.status,
@@ -143,7 +148,7 @@ async function main() {
     const [session] = await db
       .insert(s.sessions)
       .values({
-        areaId: area.id,
+        ...inA,
         createdBy: h.members[0].id,
         startsAt: daysAgo(h.ago),
         locationLabel: "Quán cafe Kết 3",
@@ -166,7 +171,7 @@ async function main() {
   const [planned] = await db
     .insert(s.sessions)
     .values({
-      areaId: area.id,
+      ...inA,
       createdBy: an.id,
       startsAt: new Date(Date.now() + 2 * DAY),
       locationLabel: "Quán cafe Kết 1",
@@ -214,13 +219,42 @@ async function main() {
   for (const e of extra) {
     const [session] = await db
       .insert(s.sessions)
-      .values({ areaId: area.id, createdBy: e.members[0].id, startsAt: e.at, locationLabel: e.place, state: e.state })
+      .values({ ...inA, createdBy: e.members[0].id, startsAt: e.at, locationLabel: e.place, state: e.state })
       .returning();
     await db.insert(s.sessionMembers).values(e.members.map((m) => ({ sessionId: session.id, userId: m.id })));
     await db.insert(s.sessionListeners).values({ sessionId: session.id, listenerId: listeners[e.listener].id });
   }
 
-  console.log(`Seeded fake data. Area leader: ${leader.phone}, members: 0900000002..05, password: ${DEV_PASSWORD}`);
+  // Area B: a listener of ae Em, and a cross-area session with ae An from area A.
+  const [emListener] = await db
+    .insert(s.listeners)
+    .values({ ...inB, name: "Chiên Khu B", birthYear: 1998, createdBy: em.id })
+    .returning();
+  await db.insert(s.listenerLinks).values({ listenerId: emListener.id, userId: em.id, addedBy: em.id });
+  await db
+    .insert(s.listenerPrivate)
+    .values({ listenerId: emListener.id, phone: "0911000099", hometown: "Đà Nẵng (giả)" });
+  const [cross] = await db
+    .insert(s.sessions)
+    .values({
+      ...inB,
+      createdBy: em.id,
+      startsAt: new Date(Date.now() + 3 * DAY),
+      locationLabel: "Quán cafe khu B",
+      state: "planned",
+    })
+    .returning();
+  await db.insert(s.sessionMembers).values([
+    { sessionId: cross.id, userId: em.id },
+    { sessionId: cross.id, userId: an.id },
+  ]);
+  await db.insert(s.sessionListeners).values({ sessionId: cross.id, listenerId: emListener.id });
+  await db.insert(s.sessionPrivate).values({ sessionId: cross.id, summary: null });
+
+  console.log(
+    `Seeded fake data. Area leader: ${leader.phone}, members: 0900000002..05, region leader: ${regionLeader.phone}, ` +
+      `area B member: ${em.phone}, password: ${DEV_PASSWORD}`,
+  );
 }
 
 main()

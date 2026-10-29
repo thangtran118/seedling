@@ -3,11 +3,11 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { listenerLinks, listenerNotes, listeners, piiAccessLog, users } from "@/db/schema";
 import type { SessionUser } from "./auth";
-import { forbiddenError, invalidError, notFoundError } from "./errors";
+import { forbiddenError, invalidError } from "./errors";
+import { canAddNote, requireInRegion } from "./scope";
 
-// Notes are private listener data, read like the listening history: callers pass only listeners whose history the
-// viewer may see (linked users, people on a session with the listener, the area leader; historyVisibleListenerIds)
-// and log that read.
+// Notes are read like the listening history, by the whole region; callers pass listeners of the viewer's region and
+// log that read. Only a người đồng hành adds one.
 export type ListenerNote = {
   id: number;
   body: string;
@@ -61,13 +61,17 @@ export function cleanNoteBody(body: string) {
 // session.
 export async function addNote(viewer: SessionUser, listenerId: number, input: { body: string }) {
   const body = cleanNoteBody(input.body);
-  const [listener] = await db.select({ areaId: listeners.areaId }).from(listeners).where(eq(listeners.id, listenerId));
-  if (!listener || listener.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy chiên.");
+  const [listener] = await db
+    .select({ areaId: listeners.areaId, regionId: listeners.regionId })
+    .from(listeners)
+    .where(eq(listeners.id, listenerId));
+  requireInRegion(viewer, listener, "Không tìm thấy chiên.");
   const [link] = await db
     .select({ userId: listenerLinks.userId })
     .from(listenerLinks)
     .where(and(eq(listenerLinks.listenerId, listenerId), eq(listenerLinks.userId, viewer.id)));
-  if (!link) throw forbiddenError("Chỉ người đồng hành của chiên này mới được thêm ghi chú.");
+  if (!canAddNote(viewer, listener, Boolean(link)))
+    throw forbiddenError("Chỉ người đồng hành của chiên này mới được thêm ghi chú.");
   await db.transaction(async (tx) => {
     await tx.insert(listenerNotes).values({ listenerId, authorId: viewer.id, body });
     await tx.insert(piiAccessLog).values({ viewerId: viewer.id, listenerId, reason: "note_added" });
@@ -77,11 +81,11 @@ export async function addNote(viewer: SessionUser, listenerId: number, input: { 
 // Only whoever wrote a note edits or deletes it.
 async function loadOwnNote(viewer: SessionUser, noteId: number) {
   const [row] = await db
-    .select({ listenerId: listenerNotes.listenerId, authorId: listenerNotes.authorId, areaId: listeners.areaId })
+    .select({ listenerId: listenerNotes.listenerId, authorId: listenerNotes.authorId, regionId: listeners.regionId })
     .from(listenerNotes)
     .innerJoin(listeners, eq(listeners.id, listenerNotes.listenerId))
     .where(eq(listenerNotes.id, noteId));
-  if (!row || row.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy ghi chú.");
+  requireInRegion(viewer, row, "Không tìm thấy ghi chú.");
   if (row.authorId !== viewer.id) throw forbiddenError("Chỉ người viết ghi chú mới được sửa hoặc xóa.");
   return row;
 }

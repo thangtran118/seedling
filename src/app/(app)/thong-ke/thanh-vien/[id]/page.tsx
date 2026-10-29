@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { requireUser } from "@/lib/access/current-user";
+import { roleLabel } from "@/lib/access/scope";
 import { memberStats } from "@/lib/access/stats";
 import { Empty, Loading, PageHeader, Section } from "@/app/ui/kit";
 import { ListenerRows } from "@/app/ui/listener-card";
@@ -25,9 +26,7 @@ async function Detail({ params }: { params: PageProps<"/thong-ke/thanh-vien/[id]
   return (
     <>
       <PageHeader title={st.member.name} back="/thong-ke" />
-      <p className="-mt-3 text-sm text-muted">
-        {st.member.role === "area_leader" ? "Khu vực trưởng" : "Thánh đồ"} · chiên người này đồng hành
-      </p>
+      <p className="-mt-3 text-sm text-muted">{roleLabel(st.member.role)} · chiên người này đồng hành</p>
       <OverviewTiles st={st} />
       <Section title={`Chiên đồng hành (${st.listeners.length})`}>
         {st.listeners.length ? (

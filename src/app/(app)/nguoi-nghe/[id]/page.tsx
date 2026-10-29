@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { removeLinkAction } from "@/app/actions/listeners";
 import { requireUser } from "@/lib/access/current-user";
 import { getListenerDetail } from "@/lib/access/listeners";
-import { listAreaMembers } from "@/lib/access/members";
+import { listRegionMembers, memberLabel } from "@/lib/access/members";
 import { noteKey } from "@/lib/domain";
 import { ActionForm, PendingButton } from "@/app/ui/action-form";
 import { ContactList } from "@/app/ui/contact";
@@ -27,7 +27,7 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
   const { id } = await params;
   const user = await requireUser();
   const l = await loadOr404(getListenerDetail(user, idOr404(id)));
-  const members = l.canManageLinks ? await listAreaMembers(user) : [];
+  const members = l.canManageLinks ? await listRegionMembers(user) : [];
   const linkable = members.filter((m) => !l.links.some((x) => x.userId === m.id));
 
   const saved = { route: l.route, manualStatus: l.manualStatus, lessons: l.lessons.length };
@@ -102,7 +102,7 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
                   {link.userId === user.id ? `${link.name} (bạn)` : link.name}
                   {link.primary && <span className="ml-2 text-xs text-muted">Đồng hành chính</span>}
                 </span>
-                {user.role === "area_leader" && !link.primary && l.links.length > 1 && (
+                {l.canRemoveLinks && !link.primary && l.links.length > 1 && (
                   <ActionForm
                     action={removeLinkAction}
                     hidden={{ listenerId: l.id, userId: link.userId }}
@@ -118,7 +118,10 @@ async function Detail({ params }: { params: PageProps<"/nguoi-nghe/[id]">["param
           </ul>
           {l.canManageLinks && linkable.length > 0 && (
             <CompanionPicker
-              choices={linkable.map((m) => ({ id: m.id, label: m.id === user.id ? `${m.name} (bạn)` : m.name }))}
+              choices={linkable.map((m) => ({
+                id: m.id,
+                label: m.id === user.id ? `${m.name} (bạn)` : memberLabel(user, m),
+              }))}
             />
           )}
         </div>

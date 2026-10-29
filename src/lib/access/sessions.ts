@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, gte, inArray, lt, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  areas,
   listenerLinks,
   listeners,
   piiAccessLog,
@@ -21,8 +22,9 @@ import {
   type SessionState,
 } from "@/lib/domain";
 import type { SessionUser } from "./auth";
-import { historyVisibleListenerIds, lessonsHeardFor } from "./listeners";
-import { forbiddenError, invalidError, notFoundError } from "./errors";
+import { lessonsHeardFor } from "./listeners";
+import { forbiddenError, invalidError } from "./errors";
+import { requireInRegion } from "./scope";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -34,9 +36,13 @@ export type SessionListItem = {
   startsAt: Date;
   state: SessionState;
   locationLabel: string | null;
-  mapUrl: string | null; // Google Maps link to the meeting place, area-visible like the place name
-  // nextLesson: the lesson to share next on the listener's route, on upcoming / in-progress sessions only and only
-  // where the viewer may see the listener's history (undefined otherwise; null when the route is done).
+  mapUrl: string | null; // Google Maps link to the meeting place, region-visible like the place name
+  otherArea: string | null; // the session's area (its creator's) when it is not the viewer's own, for a tag
+  // Every area the session belongs to: its creator's, and those of its listeners and people. A cross-area session
+  // shows under each of them.
+  areaIds: number[];
+  // nextLesson: the lesson to share next on the listener's route, on upcoming / in-progress sessions only (undefined
+  // otherwise; null when the route is done).
   // owners: the listener's người đồng hành, so the session list shows whose chiên it is.
   listeners: { id: number; name: string; owners: string[]; nextLesson?: { route: Route; n: number } | null }[];
   members: { id: number; name: string }[];
@@ -88,7 +94,7 @@ function cleanText(value: string | null, maxLen: number, label: string) {
 
 const MAP_URL_ERROR = "Link Google Maps không hợp lệ. Trên Google Maps bấm Chia sẻ → Sao chép đường liên kết.";
 
-// Only Google Maps links: the whole area sees and opens this link, so it must not point anywhere else.
+// Only Google Maps links: the whole region sees and opens this link, so it must not point anywhere else.
 function cleanMapUrl(value: string | null) {
   const t = cleanText(value, 500, "Link Google Maps");
   if (!t) return null;
@@ -127,17 +133,18 @@ async function validateComposition(viewer: SessionUser, kind: SessionKind, input
   if (memberIds.length < 1) throw invalidError("Cần ít nhất một người trudo.");
 
   if (listenerIds.length) {
+    // Listeners and people from any area of the region: trudo across areas is allowed, across regions it is not.
     const listenerRows = await db
       .select({ id: listeners.id })
       .from(listeners)
-      .where(and(inArray(listeners.id, listenerIds), eq(listeners.areaId, viewer.areaId)));
+      .where(and(inArray(listeners.id, listenerIds), eq(listeners.regionId, viewer.regionId)));
     if (listenerRows.length !== listenerIds.length) throw invalidError("Chiên không hợp lệ.");
   }
 
   const memberRows = await db
     .select({ id: users.id })
     .from(users)
-    .where(and(inArray(users.id, memberIds), eq(users.areaId, viewer.areaId), eq(users.active, true)));
+    .where(and(inArray(users.id, memberIds), eq(users.regionId, viewer.regionId), eq(users.active, true)));
   if (memberRows.length !== memberIds.length) throw invalidError("Người trudo không hợp lệ.");
   return { listenerIds, memberIds };
 }
@@ -195,7 +202,7 @@ async function writePrivate(tx: Tx, sessionId: number, p: { summary: string | nu
 
 async function loadSession(viewer: SessionUser, sessionId: number) {
   const [row] = await db.select().from(sessions).where(eq(sessions.id, sessionId));
-  if (!row || row.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy ca.");
+  requireInRegion(viewer, row, "Không tìm thấy ca.");
   return row;
 }
 
@@ -253,7 +260,8 @@ async function requireEditable(viewer: SessionUser, sessionId: number) {
 
 // "Đặt lịch trudo": a session with the planner as first member; others join from the area calendar. It completes
 // on its own 2 hours after it starts unless cancelled. Only users linked to every listener in it may plan (the area
-// leader has no special right). An outreach session has no listener, so anyone in the area may plan one. The planner
+// leader has no special right). An outreach session has no listener, so anyone in the region may plan one. The session
+// belongs to the planner's area. The planner
 // may take the sharing on (iShare) when planning a visit, as they could right after on the session page.
 export async function planSession(
   viewer: SessionUser,
@@ -272,6 +280,7 @@ export async function planSession(
       .insert(sessions)
       .values({
         areaId: viewer.areaId,
+        regionId: viewer.regionId,
         createdBy: viewer.id,
         kind: input.kind,
         startsAt: details.startsAt,
@@ -292,7 +301,7 @@ export async function planSession(
 export async function joinSession(viewer: SessionUser, sessionId: number) {
   await db.transaction(async (tx) => {
     const [row] = await tx.select().from(sessions).where(eq(sessions.id, sessionId)).for("update");
-    if (!row || row.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy ca.");
+    requireInRegion(viewer, row, "Không tìm thấy ca.");
     if (!isOpen(row)) throw invalidError("Chỉ tham gia được ca chưa bắt đầu hoặc đang diễn ra.");
     const members = await tx.select().from(sessionMembers).where(eq(sessionMembers.sessionId, sessionId));
     if (members.some((m) => m.userId === viewer.id)) return;
@@ -322,7 +331,7 @@ export async function leaveSession(viewer: SessionUser, sessionId: number) {
 export async function takeSharing(viewer: SessionUser, sessionId: number) {
   await db.transaction(async (tx) => {
     const [row] = await tx.select().from(sessions).where(eq(sessions.id, sessionId)).for("update");
-    if (!row || row.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy ca.");
+    requireInRegion(viewer, row, "Không tìm thấy ca.");
     if (row.kind !== "visit") throw invalidError("Ca đi tiếp xúc không có người chia sẻ chính.");
     if (!isOpen(row)) throw invalidError("Chỉ nhận chia sẻ được ở ca chưa bắt đầu hoặc đang diễn ra.");
     if (row.sharerId === viewer.id) return;
@@ -384,14 +393,19 @@ export async function cancelSession(viewer: SessionUser, sessionId: number) {
 async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)[]): Promise<SessionListItem[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const [ls, ms, owners] = await Promise.all([
+  const [ls, ms, owners, areaRows] = await Promise.all([
     db
-      .select({ sessionId: sessionListeners.sessionId, id: listeners.id, name: listeners.name })
+      .select({
+        sessionId: sessionListeners.sessionId,
+        id: listeners.id,
+        name: listeners.name,
+        areaId: listeners.areaId,
+      })
       .from(sessionListeners)
       .innerJoin(listeners, eq(listeners.id, sessionListeners.listenerId))
       .where(inArray(sessionListeners.sessionId, ids)),
     db
-      .select({ sessionId: sessionMembers.sessionId, id: users.id, name: users.name })
+      .select({ sessionId: sessionMembers.sessionId, id: users.id, name: users.name, areaId: users.areaId })
       .from(sessionMembers)
       .innerJoin(users, eq(users.id, sessionMembers.userId))
       .where(inArray(sessionMembers.sessionId, ids)),
@@ -402,20 +416,24 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
       .innerJoin(sessionListeners, eq(sessionListeners.listenerId, listenerLinks.listenerId))
       .where(inArray(sessionListeners.sessionId, ids))
       .orderBy(asc(listenerLinks.createdAt)),
+    db
+      .select({ id: areas.id, name: areas.name })
+      .from(areas)
+      .where(inArray(areas.id, [...new Set(rows.map((r) => r.areaId))])),
   ]);
   const ownersOf = (listenerId: number) => [
     ...new Set(owners.filter((o) => o.listenerId === listenerId).map((o) => o.name)),
   ];
   const openIds = new Set(rows.filter(isOpen).map((r) => r.id));
   const progressIds = [...new Set(ls.filter((l) => openIds.has(l.sessionId)).map((l) => l.id))];
-  const visible = await historyVisibleListenerIds(viewer, progressIds);
-  const heard = await lessonsHeardFor([...visible]);
+  const heard = await lessonsHeardFor(progressIds);
   const nextOn = (p: { route: Route; heard: number[] } | undefined) => {
     const n = p ? nextLesson(p.heard, p.route) : null;
     return p && n !== null ? { route: p.route, n } : null;
   };
   return rows.map((r) => {
-    const members = ms.filter((m) => m.sessionId === r.id).map(({ id, name }) => ({ id, name }));
+    const mine = ms.filter((m) => m.sessionId === r.id);
+    const members = mine.map(({ id, name }) => ({ id, name }));
     const isMember = members.some((m) => m.id === viewer.id);
     const sharer = r.kind === "visit" ? (members.find((m) => m.id === r.sharerId) ?? null) : null;
     return {
@@ -425,10 +443,18 @@ async function hydrate(viewer: SessionUser, rows: (typeof sessions.$inferSelect)
       state: r.state,
       locationLabel: r.locationLabel,
       mapUrl: r.mapUrl,
+      otherArea: r.areaId === viewer.areaId ? null : (areaRows.find((a) => a.id === r.areaId)?.name ?? ""),
+      areaIds: [
+        ...new Set([
+          r.areaId,
+          ...ls.filter((l) => l.sessionId === r.id).map((l) => l.areaId),
+          ...mine.map((m) => m.areaId),
+        ]),
+      ],
       listeners: ls
         .filter((l) => l.sessionId === r.id)
         .map(({ id, name }) =>
-          openIds.has(r.id) && visible.has(id)
+          openIds.has(r.id)
             ? { id, name, owners: ownersOf(id), nextLesson: nextOn(heard.get(id)) }
             : { id, name, owners: ownersOf(id) },
         ),
@@ -446,20 +472,14 @@ export async function getSessionDetail(viewer: SessionUser, sessionId: number): 
   const row = await loadSession(viewer, sessionId);
   const [item] = await hydrate(viewer, [row]);
   const listenerIds = item.listeners.map((l) => l.id);
-  // Open sessions are public in the area so people can join; completed and cancelled ones are listening history.
-  if (!(await canSeeSession(viewer, item))) throw notFoundError("Không tìm thấy ca.");
+  // Every session of the region is open to its members: upcoming ones to join, past ones as listening history.
   const [creator] = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.id, row.createdBy));
   const linked = (await linkedCount(viewer.id, listenerIds)) > 0;
   const outreach = row.kind === "outreach";
-  // Matrix: linked users and the area leader always; unlinked members only when they are in the session. Outreach
-  // notes are about no listener: the whole area reads them.
-  const canSeePrivate = outreach || linked || item.isMember || viewer.role === "area_leader";
-  let priv: SessionDetail["private"] = null;
-  if (canSeePrivate) {
-    const [p] = await db.select().from(sessionPrivate).where(eq(sessionPrivate.sessionId, sessionId));
-    priv = { summary: p?.summary ?? null };
-    await db.insert(piiAccessLog).values({ viewerId: viewer.id, sessionId, reason: "view_session_private" });
-  }
+  // The session note is read by the whole region, like listener notes; every read is logged.
+  const [p] = await db.select().from(sessionPrivate).where(eq(sessionPrivate.sessionId, sessionId));
+  const priv: SessionDetail["private"] = { summary: p?.summary ?? null };
+  await db.insert(piiAccessLog).values({ viewerId: viewer.id, sessionId, reason: "view_session_private" });
   return {
     ...item,
     createdBy: creator,
@@ -469,14 +489,15 @@ export async function getSessionDetail(viewer: SessionUser, sessionId: number): 
   };
 }
 
-// Area calendar: not-cancelled sessions from the start of today (Vietnam time).
-export async function listAreaUpcoming(viewer: SessionUser): Promise<SessionListItem[]> {
+// Calendar: not-cancelled sessions of the region from the start of today (Vietnam time). Pages narrow it to an area
+// or to the viewer's own sessions with areaIds / isMember.
+export async function listUpcoming(viewer: SessionUser): Promise<SessionListItem[]> {
   const rows = await db
     .select()
     .from(sessions)
     .where(
       and(
-        eq(sessions.areaId, viewer.areaId),
+        eq(sessions.regionId, viewer.regionId),
         eq(sessions.state, "planned"),
         sql`(${sessions.startsAt} at time zone ${TIME_ZONE})::date >= (now() at time zone ${TIME_ZONE})::date`,
       ),
@@ -485,29 +506,13 @@ export async function listAreaUpcoming(viewer: SessionUser): Promise<SessionList
   return hydrate(viewer, rows);
 }
 
-// Calendar and "today" board: sessions of the area starting in [from, to). Open ones for everyone; completed and
-// cancelled ones only where the viewer may see the listening history (see canSeeSession); outreach ones for everyone.
-export async function listAreaSessionsBetween(viewer: SessionUser, from: Date, to: Date): Promise<SessionListItem[]> {
+// Calendar and "today" board: sessions of the region starting in [from, to), all of them (open, completed, cancelled,
+// outreach); narrowed by the pages as in listUpcoming.
+export async function listSessionsBetween(viewer: SessionUser, from: Date, to: Date): Promise<SessionListItem[]> {
   const rows = await db
     .select()
     .from(sessions)
-    .where(and(eq(sessions.areaId, viewer.areaId), gte(sessions.startsAt, from), lt(sessions.startsAt, to)))
+    .where(and(eq(sessions.regionId, viewer.regionId), gte(sessions.startsAt, from), lt(sessions.startsAt, to)))
     .orderBy(asc(sessions.startsAt));
-  const items = await hydrate(viewer, rows);
-  const visible = await historyVisibleListenerIds(
-    viewer,
-    items.flatMap((s) => s.listeners.map((l) => l.id)),
-  );
-  return items.filter(
-    (s) => s.kind === "outreach" || isOpen(s) || s.isMember || s.listeners.some((l) => visible.has(l.id)),
-  );
-}
-
-async function canSeeSession(viewer: SessionUser, s: SessionListItem) {
-  if (s.kind === "outreach" || isOpen(s) || s.isMember) return true;
-  const visible = await historyVisibleListenerIds(
-    viewer,
-    s.listeners.map((l) => l.id),
-  );
-  return visible.size > 0;
+  return hydrate(viewer, rows);
 }

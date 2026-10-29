@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/access/current-user";
+import { isLeader, isRegionLeader, roleLabel } from "@/lib/access/scope";
 import { Loading, PageHeader, Section } from "@/app/ui/kit";
 import { LogoutButton } from "@/app/ui/logout-button";
 import { ThemeSwitcher } from "@/app/ui/theme";
@@ -21,8 +22,7 @@ export default function AccountPage() {
 
 async function Account() {
   const user = await requireUser();
-  const isLeader = user.role === "area_leader";
-  const role = isLeader ? "Khu vực trưởng" : "Thánh đồ";
+  const role = roleLabel(user.role);
   const initial = user.name.trim().split(/\s+/).pop()?.charAt(0).toUpperCase() ?? "?";
   return (
     <>
@@ -51,9 +51,17 @@ async function Account() {
         />
       </Section>
 
-      {isLeader && (
+      {isLeader(user) && (
         <div className="md:hidden">
           <Section title="Quản lý khu vực">
+            {isRegionLeader(user) && (
+              <Row
+                href="/khu-vuc"
+                icon="M3 5.5 8 3l4 2 5-2.5v12L12 17l-4-2-5 2.5v-12ZM8 3v12m4-10v12"
+                title="Khu vực"
+                note="Thêm khu vực, gán khu vực trưởng"
+              />
+            )}
             <Row
               href="/thanh-vien"
               icon="M10 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-6 9c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"

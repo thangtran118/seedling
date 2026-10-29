@@ -3,10 +3,12 @@ import { and, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { listenerLinks, listenerPrivate, listeners, sessionMembers, sessions, users } from "@/db/schema";
 import { addDays, dayKey, dayStart, sundayWeekStart, WEEKLY_SESSION_GOAL } from "@/lib/domain";
+import { loadAreaInRegion } from "./areas";
 import type { SessionUser } from "./auth";
 import { forbiddenError, notFoundError } from "./errors";
 import { listListenersLinkedTo, type ListenerSummary } from "./listeners";
 import { completedAt } from "./phase";
+import { inRegion, isRegionLeader, requireLeadsArea } from "./scope";
 
 // Every number here is a count: no private field is read, so nothing needs a pii_access_log row. A "buổi trudo" is
 // a completed session the person was in; weeks run Sunday to Saturday. A "chiên mới" is a listener added this
@@ -44,6 +46,13 @@ export type MemberMonthRow = {
 export type AreaStats = {
   overview: Overview;
 };
+
+// Whose numbers: one area (sessions created there, listeners of that area) or the whole region.
+type Scope = { areaId: number } | { regionId: number };
+const listenerScope = (sc: Scope) =>
+  "areaId" in sc ? eq(listeners.areaId, sc.areaId) : eq(listeners.regionId, sc.regionId);
+const sessionScope = (sc: Scope) =>
+  "areaId" in sc ? eq(sessions.areaId, sc.areaId) : eq(sessions.regionId, sc.regionId);
 
 type Milestones = { createdAt: Date; firstLessonAt: Date | null; baptizedAt: Date | null };
 type ListenerRow = Milestones & { manualStatus: string; hasContact: boolean };
@@ -95,24 +104,25 @@ const listenerCols = {
   )}, false)`,
 };
 
-// The listeners one person walks with (người đồng hành), as counted in their own stats.
-function linkedListeners(userIds: number[], areaId: number) {
+// The listeners one person walks with (người đồng hành), in any area of the region, as counted in their own stats.
+function linkedListeners(userIds: number[], regionId: number) {
   return db
     .select({ userId: listenerLinks.userId, ...listenerCols })
     .from(listenerLinks)
     .innerJoin(listeners, eq(listeners.id, listenerLinks.listenerId))
     .leftJoin(listenerPrivate, eq(listenerPrivate.listenerId, listeners.id))
-    .where(and(inArray(listenerLinks.userId, userIds), eq(listeners.areaId, areaId)));
+    .where(and(inArray(listenerLinks.userId, userIds), eq(listeners.regionId, regionId)));
 }
 
-async function personalStats(userId: number, areaId: number, now: Date): Promise<PersonalStats> {
+// A person's own numbers count every session they went on in the region, whichever area it belongs to.
+async function personalStats(userId: number, regionId: number, now: Date): Promise<PersonalStats> {
   const [rows, dates] = await Promise.all([
-    linkedListeners([userId], areaId),
+    linkedListeners([userId], regionId),
     db
       .select({ startsAt: sessions.startsAt })
       .from(sessionMembers)
       .innerJoin(sessions, eq(sessions.id, sessionMembers.sessionId))
-      .where(and(eq(sessionMembers.userId, userId), eq(sessions.areaId, areaId), completedAt(now))),
+      .where(and(eq(sessionMembers.userId, userId), eq(sessions.regionId, regionId), completedAt(now))),
   ]);
   return {
     ...weekNumbers(
@@ -125,32 +135,38 @@ async function personalStats(userId: number, areaId: number, now: Date): Promise
 
 // Everyone's own numbers (the stats page).
 export function myStats(viewer: SessionUser, now = new Date()): Promise<PersonalStats> {
-  return personalStats(viewer.id, viewer.areaId, now);
+  return personalStats(viewer.id, viewer.regionId, now);
 }
 
-// Leader: one member of the area, with the listeners they walk with.
+// A leader of the member's area (its area leader, the region leader): one member, with the listeners they walk with.
 export async function memberStats(viewer: SessionUser, memberId: number, now = new Date()): Promise<MemberStats> {
-  if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng xem được thống kê.");
   const [member] = await db
-    .select({ id: users.id, name: users.name, role: users.role, areaId: users.areaId })
+    .select({ id: users.id, name: users.name, role: users.role, areaId: users.areaId, regionId: users.regionId })
     .from(users)
     .where(eq(users.id, memberId));
-  if (!member || member.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy thành viên.");
+  if (!member || !inRegion(viewer, member)) throw notFoundError("Không tìm thấy thành viên.");
+  requireLeadsArea(viewer, member);
   const [stats, linked] = await Promise.all([
-    personalStats(member.id, viewer.areaId, now),
+    personalStats(member.id, viewer.regionId, now),
     listListenersLinkedTo(viewer, member.id),
   ]);
   return { ...stats, member: { id: member.id, name: member.name, role: member.role }, listeners: linked };
 }
 
-// Everyone in the area, this month: sessions gone on, new listeners, listeners baptized. Visible to every member;
-// sorted by báptem, then sessions, then new listeners.
-export async function memberMonthTable(viewer: SessionUser, now = new Date()): Promise<MemberMonthRow[]> {
+// Everyone in one area, this month: sessions gone on (anywhere in the region), new listeners, listeners baptized.
+// Every member sees their own area's table; the region leader picks any area. Sorted by báptem, then sessions, then
+// new listeners.
+export async function memberMonthTable(
+  viewer: SessionUser,
+  now = new Date(),
+  areaId = viewer.areaId,
+): Promise<MemberMonthRow[]> {
+  await requireAreaVisible(viewer, areaId);
   const from = monthFrom(now);
   const memberRows = await db
     .select({ id: users.id, name: users.name, role: users.role })
     .from(users)
-    .where(and(eq(users.areaId, viewer.areaId), eq(users.active, true)));
+    .where(and(eq(users.areaId, areaId), eq(users.active, true)));
   if (!memberRows.length) return [];
   const ids = memberRows.map((m) => m.id);
   const [sessionRows, links] = await Promise.all([
@@ -161,12 +177,12 @@ export async function memberMonthTable(viewer: SessionUser, now = new Date()): P
       .where(
         and(
           inArray(sessionMembers.userId, ids),
-          eq(sessions.areaId, viewer.areaId),
+          eq(sessions.regionId, viewer.regionId),
           completedAt(now),
           gte(sessions.startsAt, from),
         ),
       ),
-    linkedListeners(ids, viewer.areaId),
+    linkedListeners(ids, viewer.regionId),
   ]);
   return memberRows
     .map((m) => {
@@ -187,19 +203,24 @@ export async function memberMonthTable(viewer: SessionUser, now = new Date()): P
     );
 }
 
-// Leader: the whole area — this week's sessions and its listeners.
-export async function areaStats(viewer: SessionUser, now = new Date()): Promise<AreaStats> {
-  if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng xem được thống kê.");
+// Members see their own area's numbers; the region leader any area of the region.
+async function requireAreaVisible(viewer: SessionUser, areaId: number) {
+  await loadAreaInRegion(viewer, areaId);
+  if (areaId !== viewer.areaId && !isRegionLeader(viewer))
+    throw forbiddenError("Chỉ địa vực trưởng xem được thống kê của khu vực khác.");
+}
+
+async function overviewOf(sc: Scope, now: Date): Promise<AreaStats> {
   const [rows, dates] = await Promise.all([
     db
       .select(listenerCols)
       .from(listeners)
       .leftJoin(listenerPrivate, eq(listenerPrivate.listenerId, listeners.id))
-      .where(eq(listeners.areaId, viewer.areaId)),
+      .where(listenerScope(sc)),
     db
       .select({ startsAt: sessions.startsAt })
       .from(sessions)
-      .where(and(eq(sessions.areaId, viewer.areaId), completedAt(now))),
+      .where(and(sessionScope(sc), completedAt(now))),
   ]);
   return {
     overview: {
@@ -210,4 +231,16 @@ export async function areaStats(viewer: SessionUser, now = new Date()): Promise<
       ...listenerNumbers(rows, now),
     },
   };
+}
+
+// One area: this week's sessions (counted in the area of whoever created them, so no session counts twice in the
+// region) and its listeners.
+export async function areaStats(viewer: SessionUser, now = new Date(), areaId = viewer.areaId): Promise<AreaStats> {
+  await requireAreaVisible(viewer, areaId);
+  return overviewOf({ areaId }, now);
+}
+
+// The whole region, for everyone.
+export function regionStats(viewer: SessionUser, now = new Date()): Promise<AreaStats> {
+  return overviewOf({ regionId: viewer.regionId }, now);
 }

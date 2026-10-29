@@ -1,9 +1,11 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { requireUser } from "@/lib/access/current-user";
-import { areaStats, memberMonthTable, myStats } from "@/lib/access/stats";
-import Link from "next/link";
+import { listRegionAreas } from "@/lib/access/areas";
+import { leadsArea } from "@/lib/access/scope";
+import { areaStats, memberMonthTable, myStats, regionStats } from "@/lib/access/stats";
 import { Loading, PageHeader, Section } from "@/app/ui/kit";
+import { resolveView, viewQuery, ViewTabs } from "@/app/ui/area-scope";
 import { firstParam } from "@/app/ui/load";
 import { MemberMonthTable, OverviewTiles } from "@/app/ui/listener-stats";
 
@@ -20,53 +22,41 @@ export default function StatsPage(props: PageProps<"/thong-ke">) {
   );
 }
 
-// Everyone: their own numbers and the area's member table for this month. The area leader also gets the same
-// numbers for the whole area, one set at a time behind a switch so a phone screen shows one block of tiles.
-// Counts only, no private fields.
+// Everyone: their own numbers, their area's and the whole region's (area-scope.tsx tabs), one set at a time so a
+// phone screen shows one block of tiles; and an area's member table for this month (their own area; the region
+// leader's pick on the Địa vực tab). Counts only, no private fields.
 async function Stats({ searchParams }: { searchParams: PageProps<"/thong-ke">["searchParams"] }) {
   const user = await requireUser();
+  const sp = await searchParams;
   const now = new Date();
-  const isLeader = user.role === "area_leader";
-  const showArea = isLeader && firstParam((await searchParams).xem) === "khu-vuc";
-  const [mine, table, area] = await Promise.all([
-    showArea ? null : myStats(user, now),
-    memberMonthTable(user, now),
-    showArea ? areaStats(user, now) : null,
+  const areas = await listRegionAreas(user);
+  const scope = resolveView(user, areas, { xem: firstParam(sp.xem), kv: firstParam(sp.kv) }, "cua-toi");
+  const tableArea = scope.areaId ?? user.areaId;
+  const areaName = (id: number) => areas.find((a) => a.id === id)?.name ?? "Khu vực";
+  const [overview, table] = await Promise.all([
+    scope.view === "cua-toi"
+      ? myStats(user, now)
+      : scope.areaId !== undefined
+        ? areaStats(user, now, scope.areaId).then((a) => a.overview)
+        : regionStats(user, now).then((a) => a.overview),
+    memberMonthTable(user, now, tableArea),
   ]);
+  const title =
+    scope.view === "cua-toi" ? "Của tôi" : scope.areaId !== undefined ? areaName(scope.areaId) : "Cả địa vực";
   return (
     <>
-      {isLeader && (
-        <nav aria-label="Xem thống kê của" className="flex gap-2">
-          <Chip href="/thong-ke" on={!showArea}>
-            Của tôi
-          </Chip>
-          <Chip href="/thong-ke?xem=khu-vuc" on={showArea}>
-            Cả khu vực
-          </Chip>
-        </nav>
-      )}
-      <Section title={showArea ? "Cả khu vực" : "Của tôi"}>
-        <OverviewTiles st={area ? area.overview : mine!} />
+      <ViewTabs user={user} areas={areas} scope={scope} href={(n) => `/thong-ke${viewQuery(scope, n)}`} />
+      <Section title={title}>
+        <OverviewTiles st={overview} />
       </Section>
 
-      <Section title="Thành viên khu vực · tháng này">
-        <MemberMonthTable rows={table} viewerId={user.id} linkRows={isLeader} />
+      <Section title={`Thành viên ${areaName(tableArea)} · tháng này`}>
+        <MemberMonthTable
+          rows={table}
+          viewerId={user.id}
+          linkRows={leadsArea(user, { areaId: tableArea, regionId: user.regionId })}
+        />
       </Section>
     </>
-  );
-}
-
-function Chip({ href, on, children }: { href: string; on: boolean; children: string }) {
-  return (
-    <Link
-      href={href}
-      scroll={false}
-      aria-current={on ? "true" : undefined}
-      className={`inline-flex h-10 items-center rounded-full px-4 text-sm transition-colors ${
-        on ? "bg-accent font-semibold text-on-accent" : "border border-line bg-surface text-ink hover:bg-sunken"
-      }`}
-    >
-      {children}
-    </Link>
   );
 }

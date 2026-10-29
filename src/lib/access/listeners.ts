@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, desc, eq, ilike, inArray, lte, max, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  areas,
   listenerLinks,
   listenerNotes,
   listenerPrivate,
@@ -25,8 +26,9 @@ import {
 } from "@/lib/domain";
 import type { SessionUser } from "./auth";
 import { completedAt } from "./phase";
-import { forbiddenError, invalidError, notFoundError } from "./errors";
+import { forbiddenError, invalidError } from "./errors";
 import { cleanNoteBody, notesFor, type ListenerNote } from "./notes";
+import { canAddLinks, canRemoveLinks, canSeeContact, inRegion, requireInRegion } from "./scope";
 
 // ---------- DTOs: the only listener shapes that leave the access layer ----------
 
@@ -38,6 +40,8 @@ export type ListenerSummary = {
   manualStatus: ManualStatus;
   route: Route;
   lessons: number[];
+  area: { id: number; name: string }; // the listener's area (its creator's)
+  otherArea: string | null; // that area's name when it is not the viewer's own, for a tag on the card
   linked: boolean;
   owners: string[]; // names of the linked users (người đồng hành)
   lastDoneAt: Date | null;
@@ -63,10 +67,11 @@ export type ListenerDetail = ListenerSummary & {
   birthYear: number | null;
   links: { userId: number; name: string; primary: boolean }[]; // primary: created the listener, cannot be removed
   canEdit: boolean;
-  canManageLinks: boolean;
+  canManageLinks: boolean; // add a người đồng hành
+  canRemoveLinks: boolean;
   private: ListenerPrivateFields | null; // null when the viewer may not see it
-  notes: ListenerNote[] | null; // newest first; null with history (see historyVisibleListenerIds)
-  history: ListenerHistoryItem[] | null; // null when the viewer may not see it, see historyVisibleListenerIds
+  notes: ListenerNote[]; // newest first; the whole region reads them
+  history: ListenerHistoryItem[];
 };
 
 // ---------- shared queries ----------
@@ -80,34 +85,6 @@ export async function isLinked(userId: number, listenerId: number) {
     .from(listenerLinks)
     .where(and(eq(listenerLinks.userId, userId), eq(listenerLinks.listenerId, listenerId)));
   return Boolean(row);
-}
-
-// Listening history (which day each session was, who went) and the notes are visible to the listener's linked
-// users, to anyone who went or is going on a session with them (cancelled ones do not count), and to the area
-// leader. Returns the subset of listenerIds (all in the viewer's area) whose history this viewer may see.
-export async function historyVisibleListenerIds(viewer: SessionUser, listenerIds: number[]): Promise<Set<number>> {
-  const ids = [...new Set(listenerIds)];
-  if (ids.length === 0) return new Set();
-  if (viewer.role === "area_leader") return new Set(ids);
-  const [linked, joined] = await Promise.all([
-    db
-      .select({ id: listenerLinks.listenerId })
-      .from(listenerLinks)
-      .where(and(eq(listenerLinks.userId, viewer.id), inArray(listenerLinks.listenerId, ids))),
-    db
-      .selectDistinct({ id: sessionListeners.listenerId })
-      .from(sessionListeners)
-      .innerJoin(sessionMembers, eq(sessionMembers.sessionId, sessionListeners.sessionId))
-      .innerJoin(sessions, eq(sessions.id, sessionListeners.sessionId))
-      .where(
-        and(
-          eq(sessionMembers.userId, viewer.id),
-          ne(sessions.state, "cancelled"),
-          inArray(sessionListeners.listenerId, ids),
-        ),
-      ),
-  ]);
-  return new Set([...linked, ...joined].map((r) => r.id));
 }
 
 // Progress is sequential: reaching lesson N counts 1..N-1 as heard too, so only the highest lesson reached
@@ -139,9 +116,15 @@ async function lastDoneFor(listenerIds: number[]): Promise<Map<number, Date>> {
 
 async function summarize(viewer: SessionUser, rows: (typeof listeners.$inferSelect)[]): Promise<ListenerSummary[]> {
   const ids = rows.map((r) => r.id);
-  const [lessons, lastDone, links] = await Promise.all([
+  const [lessons, lastDone, areaRows, links] = await Promise.all([
     lessonsHeardFor(ids),
     lastDoneFor(ids),
+    ids.length
+      ? db
+          .select({ id: areas.id, name: areas.name })
+          .from(areas)
+          .where(inArray(areas.id, [...new Set(rows.map((r) => r.areaId))]))
+      : Promise.resolve([]),
     ids.length
       ? db
           .select({ listenerId: listenerLinks.listenerId, userId: users.id, name: users.name })
@@ -152,6 +135,7 @@ async function summarize(viewer: SessionUser, rows: (typeof listeners.$inferSele
       : Promise.resolve([]),
   ]);
   const linkedIds = new Set(links.filter((l) => l.userId === viewer.id).map((l) => l.listenerId));
+  const areaName = (id: number) => areaRows.find((a) => a.id === id)?.name ?? "";
   return rows.map((r) => {
     const heard = lessons.get(r.id)?.heard ?? [];
     return {
@@ -162,6 +146,8 @@ async function summarize(viewer: SessionUser, rows: (typeof listeners.$inferSele
       manualStatus: r.manualStatus,
       route: r.route,
       lessons: heard,
+      area: { id: r.areaId, name: areaName(r.areaId) },
+      otherArea: r.areaId === viewer.areaId ? null : areaName(r.areaId),
       linked: linkedIds.has(r.id),
       owners: links.filter((l) => l.listenerId === r.id).map((l) => l.name),
       lastDoneAt: lastDone.get(r.id) ?? null,
@@ -169,10 +155,10 @@ async function summarize(viewer: SessionUser, rows: (typeof listeners.$inferSele
   });
 }
 
-async function loadInArea(viewer: SessionUser, listenerId: number) {
+async function loadInRegion(viewer: SessionUser, listenerId: number) {
   const [row] = await db.select().from(listeners).where(eq(listeners.id, listenerId));
-  // Cross-area access is out of MVP scope: a listener from another area simply does not exist for this viewer.
-  if (!row || row.areaId !== viewer.areaId) throw notFoundError("Không tìm thấy chiên.");
+  // A listener of another region simply does not exist for this viewer.
+  requireInRegion(viewer, row, "Không tìm thấy chiên.");
   return row;
 }
 
@@ -205,15 +191,24 @@ async function wentWithIds(viewer: SessionUser, listenerIds: number[]): Promise<
   return new Set(rows.map((r) => r.id));
 }
 
-// The listener list: everyone in the area sees every listener of the area ("Chiên cả khu vực"), as a summary only
-// (name, age, status, lessons; contact details stay behind the listener page's own checks). `mine` marks the
-// viewer's own ones ("Chiên bạn np").
-export async function listListeners(viewer: SessionUser, opts: { query?: string } = {}): Promise<ListenerListItem[]> {
+// The listener list: everyone in the region sees every listener of the region, as a summary only (name, age, status,
+// lessons; contact details stay behind the listener page's own checks). `areaId` narrows it to one area of the
+// region (callers check it with loadAreaInRegion). `mine` marks the viewer's own ones ("Chiên bạn np").
+export async function listListeners(
+  viewer: SessionUser,
+  opts: { query?: string; areaId?: number } = {},
+): Promise<ListenerListItem[]> {
   const q = opts.query?.trim();
   const rows = await db
     .select()
     .from(listeners)
-    .where(and(eq(listeners.areaId, viewer.areaId), q ? ilike(listeners.name, `%${escapeLike(q)}%`) : undefined))
+    .where(
+      and(
+        eq(listeners.regionId, viewer.regionId),
+        opts.areaId ? eq(listeners.areaId, opts.areaId) : undefined,
+        q ? ilike(listeners.name, `%${escapeLike(q)}%`) : undefined,
+      ),
+    )
     .orderBy(asc(listeners.name));
   const [summaries, went] = await Promise.all([
     summarize(viewer, rows),
@@ -225,15 +220,15 @@ export async function listListeners(viewer: SessionUser, opts: { query?: string 
   return summaries.map((l) => ({ ...l, mine: l.linked || went.has(l.id) }));
 }
 
-// Leader view of one member's listeners (the member stats page). Same summary shape as the list.
+// Leader view of one member's listeners (the member stats page, which checks the viewer leads that member's area).
+// Same summary shape as the list.
 export async function listListenersLinkedTo(viewer: SessionUser, userId: number): Promise<ListenerSummary[]> {
-  if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng xem được.");
   const rows = await db
     .select()
     .from(listeners)
     .where(
       and(
-        eq(listeners.areaId, viewer.areaId),
+        eq(listeners.regionId, viewer.regionId),
         inArray(
           listeners.id,
           db.select({ id: listenerLinks.listenerId }).from(listenerLinks).where(eq(listenerLinks.userId, userId)),
@@ -246,22 +241,23 @@ export async function listListenersLinkedTo(viewer: SessionUser, userId: number)
 
 export type SessionListener = ListenerSummary & {
   private: ListenerPrivateFields | null;
-  notes: ListenerNote[] | null; // newest first; null with history (see historyVisibleListenerIds)
-  history: ListenerHistoryItem[] | null;
+  notes: ListenerNote[]; // newest first
+  history: ListenerHistoryItem[];
 };
 
 // Listeners as shown on a session page, in the given order. Callers pass the listeners of a session the viewer
-// may open (getSessionDetail checks that). Contact fields follow the listener rule: linked users and the area
-// leader only; history and notes follow the history rule (people on a session with the listener too). Each read is logged
-// exactly like the listener page.
+// may open (getSessionDetail checks that). Contact fields follow the listener rule (scope.canSeeContact); history and
+// notes are open to the region. Each read is logged exactly like the listener page.
 export async function listenersForSession(viewer: SessionUser, listenerIds: number[]): Promise<SessionListener[]> {
   if (listenerIds.length === 0) return [];
   const rows = await db
     .select()
     .from(listeners)
-    .where(and(inArray(listeners.id, listenerIds), eq(listeners.areaId, viewer.areaId)));
+    .where(and(inArray(listeners.id, listenerIds), eq(listeners.regionId, viewer.regionId)));
   const summaries = await summarize(viewer, rows);
-  const allowed = summaries.filter((l) => l.linked || viewer.role === "area_leader").map((l) => l.id);
+  const allowed = summaries
+    .filter((l) => canSeeContact(viewer, { areaId: l.area.id, regionId: viewer.regionId }, l.linked))
+    .map((l) => l.id);
   const privateRows = allowed.length
     ? await db.select().from(listenerPrivate).where(inArray(listenerPrivate.listenerId, allowed))
     : [];
@@ -270,7 +266,7 @@ export async function listenersForSession(viewer: SessionUser, listenerIds: numb
       .insert(piiAccessLog)
       .values(allowed.map((listenerId) => ({ viewerId: viewer.id, listenerId, reason: "view_listener_private" })));
   }
-  const withNotes = [...(await historyVisibleListenerIds(viewer, listenerIds))];
+  const withNotes = summaries.map((l) => l.id);
   if (withNotes.length) {
     await db
       .insert(piiAccessLog)
@@ -297,15 +293,15 @@ export async function listenersForSession(viewer: SessionUser, listenerIds: numb
               telegram: p?.telegram ?? null,
             }
           : null,
-        notes: withNotes.includes(id) ? (notes.get(id) ?? []) : null,
-        history: histories.get(id) ?? null,
+        notes: notes.get(id) ?? [],
+        history: histories.get(id) ?? [],
       },
     ];
   });
 }
 
 export async function getListenerDetail(viewer: SessionUser, listenerId: number): Promise<ListenerDetail> {
-  const row = await loadInArea(viewer, listenerId);
+  const row = await loadInRegion(viewer, listenerId);
   const [summary] = await summarize(viewer, [row]);
 
   const links = (
@@ -317,7 +313,7 @@ export async function getListenerDetail(viewer: SessionUser, listenerId: number)
       .orderBy(asc(listenerLinks.createdAt))
   ).map((link) => ({ ...link, primary: link.userId === row.createdBy }));
 
-  const canViewPrivate = summary.linked || viewer.role === "area_leader";
+  const canViewPrivate = canSeeContact(viewer, row, summary.linked);
   let privateFields: ListenerPrivateFields | null = null;
   if (canViewPrivate) {
     const [p] = await db.select().from(listenerPrivate).where(eq(listenerPrivate.listenerId, listenerId));
@@ -331,19 +327,19 @@ export async function getListenerDetail(viewer: SessionUser, listenerId: number)
     await logAccess({ viewerId: viewer.id, listenerId, reason: "view_listener_private" });
   }
 
-  const canViewHistory = (await historyVisibleListenerIds(viewer, [listenerId])).has(listenerId);
-  // People on a session with this listener read its history and notes (not the contact fields).
-  if (canViewHistory) await logAccess({ viewerId: viewer.id, listenerId, reason: "view_listener_history" });
+  // The whole region reads the history and notes (not the contact fields); every read is logged.
+  await logAccess({ viewerId: viewer.id, listenerId, reason: "view_listener_history" });
 
   return {
     ...summary,
     birthYear: row.birthYear,
     links,
     canEdit: summary.linked,
-    canManageLinks: summary.linked || viewer.role === "area_leader",
+    canManageLinks: canAddLinks(viewer, row, summary.linked),
+    canRemoveLinks: canRemoveLinks(viewer, row),
     private: privateFields,
-    notes: canViewHistory ? ((await notesFor(viewer, [listenerId])).get(listenerId) ?? []) : null,
-    history: canViewHistory ? await listenerHistory(listenerId) : null,
+    notes: (await notesFor(viewer, [listenerId])).get(listenerId) ?? [],
+    history: await listenerHistory(listenerId),
   };
 }
 
@@ -372,7 +368,8 @@ async function listenerHistory(listenerId: number): Promise<ListenerHistoryItem[
   }));
 }
 
-// Possible duplicates shown before a new listener is created (same area, name contains/contained).
+// Possible duplicates shown before a new listener is created (same region, name contains/contained): several areas
+// may meet the same person.
 export async function findSimilarListeners(viewer: SessionUser, name: string) {
   const trimmed = name.trim();
   if (trimmed.length < 2) return [];
@@ -382,7 +379,7 @@ export async function findSimilarListeners(viewer: SessionUser, name: string) {
     .from(listeners)
     .where(
       and(
-        eq(listeners.areaId, viewer.areaId),
+        eq(listeners.regionId, viewer.regionId),
         sql`(lower(${listeners.name}) like ${"%" + needle + "%"} or ${trimmed.toLowerCase()} like '%' || lower(${listeners.name}) || '%')`,
       ),
     )
@@ -445,6 +442,7 @@ export async function createListener(
       .insert(listeners)
       .values({
         areaId: viewer.areaId,
+        regionId: viewer.regionId,
         name: clean.name,
         birthYear: clean.birthYear,
         manualStatus,
@@ -463,7 +461,7 @@ export async function createListener(
 }
 
 async function requireLinked(viewer: SessionUser, listenerId: number) {
-  await loadInArea(viewer, listenerId);
+  await loadInRegion(viewer, listenerId);
   if (!(await isLinked(viewer.id, listenerId))) {
     throw forbiddenError("Chỉ người đồng hành của chiên này mới được sửa.");
   }
@@ -519,14 +517,15 @@ export async function setProgress(viewer: SessionUser, listenerId: number, p: Pr
   if (updated.length === 0) throw invalidError("Lộ trình của chiên vừa được người khác đổi. Tải lại trang.");
 }
 
-// Linked users and the area leader may add a link (a leader adding themselves is how they gain edit rights).
+// Linked users and the leaders of the listener's area may add a link (a leader adding themselves is how they gain edit
+// rights). The person added may be from any area of the region.
 export async function addLink(viewer: SessionUser, listenerId: number, targetUserId: number) {
-  await loadInArea(viewer, listenerId);
-  if (viewer.role !== "area_leader" && !(await isLinked(viewer.id, listenerId))) {
+  const row = await loadInRegion(viewer, listenerId);
+  if (!canAddLinks(viewer, row, await isLinked(viewer.id, listenerId))) {
     throw forbiddenError("Chỉ người đồng hành hoặc khu vực trưởng mới được thêm người đồng hành.");
   }
   const [target] = await db.select().from(users).where(eq(users.id, targetUserId));
-  if (!target || !target.active || target.areaId !== viewer.areaId) throw invalidError("Người được thêm không hợp lệ.");
+  if (!target || !target.active || !inRegion(viewer, target)) throw invalidError("Người được thêm không hợp lệ.");
   if (await isLinked(targetUserId, listenerId)) return;
   await db.transaction(async (tx) => {
     await tx.insert(listenerLinks).values({ listenerId, userId: targetUserId, addedBy: viewer.id });
@@ -537,8 +536,8 @@ export async function addLink(viewer: SessionUser, listenerId: number, targetUse
 // Removing links is a leader action. The person who created the listener (người đồng hành chính) stays, so every
 // listener keeps at least that one link and stays editable.
 export async function removeLink(viewer: SessionUser, listenerId: number, targetUserId: number) {
-  const row = await loadInArea(viewer, listenerId);
-  if (viewer.role !== "area_leader") throw forbiddenError("Chỉ khu vực trưởng mới được bỏ người đồng hành.");
+  const row = await loadInRegion(viewer, listenerId);
+  if (!canRemoveLinks(viewer, row)) throw forbiddenError("Chỉ khu vực trưởng mới được bỏ người đồng hành.");
   if (targetUserId === row.createdBy) throw invalidError("Không thể bỏ người đồng hành chính (người tạo chiên).");
   await db.transaction(async (tx) => {
     const links = await tx

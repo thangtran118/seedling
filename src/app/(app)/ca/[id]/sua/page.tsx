@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { updateSessionAction } from "@/app/actions/sessions";
 import { requireUser } from "@/lib/access/current-user";
-import { listAreaMembers } from "@/lib/access/members";
+import { listRegionMembers, memberLabel } from "@/lib/access/members";
 import { getSessionDetail } from "@/lib/access/sessions";
 import { toLocalInputValue } from "@/lib/domain";
 import { Loading, PageHeader } from "@/app/ui/kit";
@@ -27,8 +27,11 @@ async function Edit({ params }: { params: PageProps<"/ca/[id]/sua">["params"] })
   // Completed and cancelled sessions are history: canEdit is false for them.
   if (!s.canEdit) notFound();
 
-  const members = await listAreaMembers(user);
-  const memberChoices = [...members, ...s.members.filter((m) => !members.some((x) => x.id === m.id))];
+  const members = await listRegionMembers(user);
+  const memberChoices = [
+    ...members.map((m) => ({ id: m.id, name: memberLabel(user, m) })),
+    ...s.members.filter((m) => !members.some((x) => x.id === m.id)),
+  ];
 
   return (
     <>

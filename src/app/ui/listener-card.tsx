@@ -10,6 +10,7 @@ import {
   type Route,
   type Stage,
 } from "@/lib/domain";
+import { AreaTag } from "./area-tag";
 import { LessonDots, StageBadge } from "./kit";
 
 type ListenerLike = {
@@ -20,6 +21,7 @@ type ListenerLike = {
   route: Route;
   lessons: number[];
   owners?: string[];
+  otherArea?: string | null;
 };
 
 // One line under the dots: how far, and what comes next (not for báptem / từ chối).
@@ -58,7 +60,10 @@ export function ListenerCard({ l, footer }: { l: ListenerLike; footer?: ReactNod
         <span className="truncate text-lg font-bold leading-tight text-ink">{l.name}</span>
         <StageBadge stage={l.stage} route={l.route} />
       </div>
-      <span className="text-sm text-muted">{l.age === null ? "Chưa rõ tuổi" : `${l.age} tuổi`}</span>
+      <span className="flex items-center gap-2 text-sm text-muted">
+        {l.age === null ? "Chưa rõ tuổi" : `${l.age} tuổi`}
+        {l.otherArea && <AreaTag name={l.otherArea} />}
+      </span>
       <div className="mt-1 flex flex-col gap-1">
         <LessonDots heard={l.lessons} route={l.route} closed={isClosedStage(l.stage)} />
         <ProgressNote lessons={l.lessons} stage={l.stage} route={l.route} />

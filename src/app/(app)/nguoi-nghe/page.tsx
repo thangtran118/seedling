@@ -2,9 +2,11 @@ import { Suspense } from "react";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { requireUser } from "@/lib/access/current-user";
+import { listRegionAreas } from "@/lib/access/areas";
 import { listListeners, type ListenerListItem } from "@/lib/access/listeners";
 import { isClosedStage } from "@/lib/domain";
 import { Empty, Fab, FabStack, HeaderAction, Loading, PageHeader, TextLink } from "@/app/ui/kit";
+import { listenerInView, resolveView, viewCounts, viewQuery, ViewTabs } from "@/app/ui/area-scope";
 import { ListenerCard } from "@/app/ui/listener-card";
 import { firstParam } from "@/app/ui/load";
 import { SearchBox } from "@/app/ui/search-box";
@@ -43,58 +45,26 @@ const FILTERS = [
   { key: "tu-choi", label: "Từ chối", match: (l: ListenerListItem) => l.stage === "tu_choi" },
 ] as const;
 
-// "Chiên bạn np" (default): the viewer's own ones, linked or gone on a session with; "Chiên cả khu vực": all of them.
-// ?tab= in the URL like the filter, so search and filter carry over when switching.
-const TABS = [
-  { key: "", label: "Chiên ae np", match: (l: ListenerListItem) => l.mine },
-  { key: "khu-vuc", label: "Chiên khu vực", match: () => true },
-] as const;
-
 async function List({ searchParams }: { searchParams: PageProps<"/nguoi-nghe">["searchParams"] }) {
   const user = await requireUser();
   const sp = await searchParams;
   const q = firstParam(sp.q) ?? "";
   const filter = FILTERS.find((f) => f.key === firstParam(sp.tt)) ?? FILTERS[0];
-  const tab = TABS.find((t) => t.key === firstParam(sp.tab)) ?? TABS[0];
-  const everyone = await listListeners(user, { query: q });
-  const all = everyone.filter(tab.match);
+  const [everyone, areas] = await Promise.all([listListeners(user, { query: q }), listRegionAreas(user)]);
+  // Của tôi (default): linked or gone on a session with, in any area; Khu vực; Địa vực (area-scope.tsx). Old links
+  // used ?tab=khu-vuc.
+  const xem = firstParam(sp.xem) ?? (firstParam(sp.tab) === "khu-vuc" ? "khu-vuc" : undefined);
+  const scope = resolveView(user, areas, { xem, kv: firstParam(sp.kv) }, "cua-toi");
+  const all = everyone.filter((l) => listenerInView(scope, l));
   const list = all.filter(filter.match);
-  const href = (next: { tab?: string; tt?: string }) => {
-    const p = new URLSearchParams();
-    const t = next.tab ?? tab.key;
-    const tt = next.tt ?? filter.key;
-    if (t) p.set("tab", t);
-    if (q) p.set("q", q);
-    if (tt) p.set("tt", tt);
-    const s = p.toString();
-    return s ? `/nguoi-nghe?${s}` : "/nguoi-nghe";
-  };
+  const counts = viewCounts(user, areas, scope, everyone, listenerInView);
+  const href = (next: Parameters<typeof viewQuery>[1] & { tt?: string }) =>
+    `/nguoi-nghe${viewQuery(scope, next, { q, tt: next.tt ?? filter.key })}`;
 
   return (
     <>
       <div className="flex flex-col gap-3">
-        <nav aria-label="Chiên của ai" className="md:max-w-xl">
-          <ul className="grid grid-cols-2 gap-1 rounded-xl bg-sunken p-1">
-            {TABS.map((t) => {
-              const on = t === tab;
-              return (
-                <li key={t.key}>
-                  <Link
-                    href={href({ tab: t.key })}
-                    scroll={false}
-                    aria-current={on ? "page" : undefined}
-                    className={`flex h-10 items-center justify-center gap-1.5 rounded-lg text-sm transition-colors ${
-                      on ? "bg-surface font-semibold text-ink shadow-sm" : "text-muted hover:text-ink"
-                    }`}
-                  >
-                    {t.label}
-                    <span className="tabular-nums text-xs text-muted">{everyone.filter(t.match).length}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+        <ViewTabs user={user} areas={areas} scope={scope} counts={counts} href={href} />
         <SearchBox placeholder="Tìm theo tên…" />
         {/* Five equal cells in one row: no sideways scrolling on a phone, and the counts read as an overview. */}
         <nav aria-label="Lọc theo trạng thái" className="md:max-w-xl">
@@ -138,7 +108,9 @@ async function List({ searchParams }: { searchParams: PageProps<"/nguoi-nghe">["
           </Empty>
         ) : (
           <Empty action={<TextLink href="/nguoi-nghe/moi">+ Thêm chiên đầu tiên</TextLink>}>
-            {tab.key ? "Khu vực chưa có chiên nào." : "Bạn chưa đồng hành hay đi ca với chiên nào."}
+            {scope.view === "cua-toi"
+              ? "Bạn chưa đồng hành hay đi ca với chiên nào."
+              : `${scope.view === "dia-vuc" && scope.areaId === undefined ? "Địa vực" : "Khu vực"} chưa có chiên nào.`}
           </Empty>
         ))}
       {list.length > 0 && (

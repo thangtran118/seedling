@@ -3,12 +3,14 @@
 import { useActionState, useState } from "react";
 import {
   createMemberAction,
+  moveMemberAction,
   removeMemberAction,
   resetPasswordAction,
   setLockedAction,
   type MemberState,
 } from "@/app/actions/members";
 import type { MemberAdminView } from "@/lib/access/members";
+import { roleLabel } from "@/lib/access/scope";
 import { INPUT } from "./kit";
 
 function Credentials({ state }: { state: MemberState }) {
@@ -45,7 +47,7 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function StateLine({ state }: { state: MemberState }) {
+export function StateLine({ state }: { state: MemberState }) {
   return (
     <>
       {state?.error && <p className="mt-2 text-sm text-danger">{state.error}</p>}
@@ -55,10 +57,11 @@ function StateLine({ state }: { state: MemberState }) {
   );
 }
 
-export function CreateMemberForm() {
+export function CreateMemberForm({ areaId }: { areaId: number }) {
   const [state, action, pending] = useActionState(createMemberAction, undefined);
   return (
     <form action={action} className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3">
+      <input type="hidden" name="areaId" value={areaId} />
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1.5">
           <span className="text-sm font-semibold text-ink">Tên</span>
@@ -80,8 +83,18 @@ export function CreateMemberForm() {
 const small =
   "h-10 rounded-lg border border-line px-3 text-sm text-ink transition-colors hover:bg-sunken disabled:opacity-50";
 
-export function MemberRow({ member, isSelf }: { member: MemberAdminView; isSelf: boolean }) {
+// moveTo: the other areas of the region, given to the region leader only (members move, leaders do not).
+export function MemberRow({
+  member,
+  isSelf,
+  moveTo = [],
+}: {
+  member: MemberAdminView;
+  isSelf: boolean;
+  moveTo?: { id: number; name: string }[];
+}) {
   const [resetState, resetAction, resetting] = useActionState(resetPasswordAction, undefined);
+  const [moveState, moveAction, moving] = useActionState(moveMemberAction, undefined);
   const [lockState, lockAction, locking] = useActionState(setLockedAction, undefined);
   const [removeState, removeAction, removing] = useActionState(removeMemberAction, undefined);
   const hidden = (
@@ -91,7 +104,7 @@ export function MemberRow({ member, isSelf }: { member: MemberAdminView; isSelf:
     </>
   );
   const badges = [
-    member.role === "area_leader" && "Khu vực trưởng",
+    member.role !== "member" && roleLabel(member.role),
     !member.active && "Đã vô hiệu",
     member.locked && "Đang khóa",
     member.active && member.mustChangePassword && "Chưa đổi mật khẩu",
@@ -151,11 +164,36 @@ export function MemberRow({ member, isSelf }: { member: MemberAdminView; isSelf:
               Xóa
             </button>
           </form>
+          {member.role === "member" && moveTo.length > 0 && (
+            <form
+              action={moveAction}
+              className="flex gap-2"
+              onSubmit={(e) => {
+                const to = new FormData(e.currentTarget).get("areaId");
+                const name = moveTo.find((a) => String(a.id) === to)?.name;
+                if (!window.confirm(`Chuyển ${member.name} sang ${name}? Chiên của người này vẫn ở khu vực cũ.`))
+                  e.preventDefault();
+              }}
+            >
+              {hidden}
+              <select name="areaId" aria-label="Chuyển sang khu vực" className={`${small} bg-surface`}>
+                {moveTo.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+              <button disabled={moving} className={small}>
+                Chuyển khu vực
+              </button>
+            </form>
+          )}
         </div>
       )}
       <StateLine state={resetState} />
       <StateLine state={lockState} />
       <StateLine state={removeState} />
+      <StateLine state={moveState} />
     </li>
   );
 }

@@ -18,8 +18,9 @@ const DUMMY_HASH_PROMISE = hash("dummy-password-for-timing");
 export type SessionUser = {
   id: number;
   name: string;
-  role: "member" | "area_leader";
+  role: "member" | "area_leader" | "region_leader";
   areaId: number;
+  regionId: number;
   mustChangePassword: boolean;
 };
 
@@ -35,6 +36,7 @@ function toSessionUser(u: typeof users.$inferSelect): SessionUser {
     name: u.name,
     role: u.role,
     areaId: u.areaId,
+    regionId: u.regionId,
     mustChangePassword: u.mustChangePassword,
   };
 }

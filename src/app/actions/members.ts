@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { requireUser } from "@/lib/access/current-user";
 import { createMember, removeMember, resetMemberPassword, setMemberLocked } from "@/lib/access/members";
+import { moveMember } from "@/lib/access/regions";
 import { guard, idSchema, isActionError } from "./guard";
 
 export type MemberState =
@@ -12,7 +13,8 @@ export async function createMemberAction(_prev: MemberState, formData: FormData)
   const user = await requireUser();
   const name = String(formData.get("name") ?? "");
   const phone = String(formData.get("phone") ?? "");
-  const result = await guard(() => createMember(user, { name, phone }));
+  const area = idSchema.safeParse(formData.get("areaId"));
+  const result = await guard(() => createMember(user, { name, phone, areaId: area.success ? area.data : undefined }));
   if (isActionError(result)) return { error: result.error };
   refresh();
   return { credentials: { name: name.trim(), ...result } };
@@ -53,4 +55,14 @@ export async function removeMemberAction(_prev: MemberState, formData: FormData)
     message:
       result === "deleted" ? "Đã xóa tài khoản." : "Tài khoản đã có lịch sử ca nên được vô hiệu hóa thay vì xóa.",
   };
+}
+
+export async function moveMemberAction(_prev: MemberState, formData: FormData): Promise<MemberState> {
+  const { user, targetId } = await withMember(formData);
+  const area = idSchema.safeParse(formData.get("areaId"));
+  if (!targetId || !area.success) return { error: "Dữ liệu không hợp lệ." };
+  const result = await guard(() => moveMember(user, targetId, area.data));
+  if (result) return { error: result.error };
+  refresh();
+  return { message: "Đã chuyển khu vực." };
 }

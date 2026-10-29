@@ -1,7 +1,7 @@
 import { planSessionAction } from "@/app/actions/sessions";
 import { requireUser } from "@/lib/access/current-user";
 import { listListeners } from "@/lib/access/listeners";
-import { listAreaMembers } from "@/lib/access/members";
+import { listRegionMembers, memberLabel } from "@/lib/access/members";
 import { dayKey, floorToQuarterHour, parseDayKey, toLocalInputValue } from "@/lib/domain";
 import { firstParam } from "./load";
 import { SessionForm } from "./session-form";
@@ -28,7 +28,7 @@ export async function SessionEntry({
   const sp = await searchParams;
   const preselect = Number(firstParam(sp["nguoi-nghe"]));
   const day = parseDayKey(firstParam(sp.ngay)) ?? null;
-  const [all, members] = await Promise.all([listListeners(user), listAreaMembers(user)]);
+  const [all, members] = await Promise.all([listListeners(user), listRegionMembers(user)]);
   // Planning is for direct companions only: only the viewer's own listeners can be picked.
   const listeners = all.filter((l) => l.linked);
   const selected = listeners.find((l) => l.id === preselect);
@@ -40,7 +40,7 @@ export async function SessionEntry({
       mode="plan"
       currentUserId={user.id}
       listeners={listeners.map(({ id, name, stage, route, linked }) => ({ id, name, stage, route, linked }))}
-      members={members.map(({ id, name }) => ({ id, name }))}
+      members={members.map((m) => ({ id: m.id, name: memberLabel(user, m) }))}
       submit={planSessionAction}
       initial={{
         kind,

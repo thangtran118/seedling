@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/access/current-user";
+import { isLeader, isRegionLeader, roleLabel } from "@/lib/access/scope";
 import { NavHistory } from "@/app/ui/back-link";
 import { BottomNav, SideNav } from "@/app/ui/nav";
 
@@ -26,11 +27,12 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
 async function Nav() {
   const user = await getCurrentUser();
   if (!user || user.mustChangePassword) return null;
-  const isLeader = user.role === "area_leader";
+  const leader = isLeader(user);
+  const regionLeader = isRegionLeader(user);
   return (
     <>
-      <SideNav isLeader={isLeader} name={user.name} areaRole={isLeader ? "Khu vực trưởng" : "Thánh đồ"} />
-      <BottomNav isLeader={isLeader} />
+      <SideNav isLeader={leader} isRegionLeader={regionLeader} name={user.name} areaRole={roleLabel(user.role)} />
+      <BottomNav isLeader={leader} isRegionLeader={regionLeader} />
     </>
   );
 }
