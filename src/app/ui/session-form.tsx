@@ -4,10 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { SessionFormResult, SessionPayload } from "@/app/actions/sessions";
 import {
-  addDays,
-  dayKey,
   formatDateTime,
-  formatDayLong,
   isOpenPhase,
   PHASE_LABEL,
   sessionPhase,
@@ -15,9 +12,8 @@ import {
   type SessionKind,
   type Route,
   type Stage,
-  relativeDay,
-  weekdayIndex,
 } from "@/lib/domain";
+import { DateTimePicker } from "./date-time-picker";
 import { INPUT, KindIcon } from "./kit";
 
 export type PickListener = { id: number; name: string; stage: Stage; route: Route; linked: boolean };
@@ -64,7 +60,7 @@ export function SessionForm(props: SessionFormProps) {
   const noListener = mode === "plan" && !outreach && listeners.length === 0;
   const [listenerIds, setListenerIds] = useState<number[]>(initial.listenerIds);
   const [memberIds, setMemberIds] = useState<number[]>(initial.memberIds);
-  // Day and time are picked apart (each opens the phone's own picker) and only make a start once both are set.
+  // Day (YYYY-MM-DD) and time (HH:MM), chosen together in one sheet.
   const [day, setDay] = useState(initial.startsAt.slice(0, 10));
   const [time, setTime] = useState(initial.startsAt.slice(11, 16));
   const startsAt = day && time ? `${day}T${time}` : "";
@@ -232,7 +228,21 @@ export function SessionForm(props: SessionFormProps) {
 
           {/* 3. When and where */}
           <fieldset className="flex flex-col gap-3">
-            <StartsAtField day={day} time={time} onDay={setDay} onTime={setTime} invalid={show("startsAt")} />
+            <fieldset className="flex flex-col gap-1.5" data-missing={show("startsAt") || undefined}>
+              <legend className="mb-1.5 text-sm font-semibold text-ink">
+                Thời gian <Required />
+              </legend>
+              <DateTimePicker
+                day={day}
+                time={time}
+                onChange={(d, t) => {
+                  setDay(d);
+                  setTime(t);
+                }}
+                invalid={show("startsAt")}
+              />
+              {show("startsAt") && <FieldError>Chọn ngày giờ.</FieldError>}
+            </fieldset>
             <label className="flex flex-col gap-1.5">
               <span className="text-sm font-semibold text-ink">
                 {outreach ? "Khu vực tiếp xúc" : "Nơi gặp"}{" "}
@@ -377,144 +387,6 @@ function NoListener({ onOutreach }: { onOutreach: () => void }) {
         Hoặc đặt ca đi tiếp xúc
       </button>
     </div>
-  );
-}
-
-// Quick day tiles, two native pickers (day, time) in large type, and the result spelled out in words underneath,
-// since a phone shows "07/11/2026" and leaves the weekday to the reader.
-function StartsAtField({
-  day,
-  time,
-  onDay,
-  onTime,
-  invalid,
-}: {
-  day: string;
-  time: string;
-  onDay: (day: string) => void;
-  onTime: (time: string) => void;
-  invalid: boolean;
-}) {
-  const today = dayKey(new Date());
-  // The coming Saturday or Sunday (Monday = 0), a week out when it is today.
-  const next = (wd: number) => addDays(today, (wd - weekdayIndex(today) + 7) % 7 || 7);
-  const quick = [
-    { day: today, label: "Hôm nay" },
-    { day: addDays(today, 1), label: "Ngày mai" },
-    { day: next(5), label: "Thứ 7" },
-    { day: next(6), label: "Chủ nhật" },
-  ].filter((q, i, all) => all.findIndex((o) => o.day === q.day) === i);
-  const field = `${INPUT} h-14 w-full pl-10 text-lg font-semibold tabular-nums`;
-  // Desktop browsers open the picker only from its small icon; a tap anywhere on the field should do it.
-  const openPicker = (e: React.MouseEvent<HTMLInputElement>) => {
-    try {
-      e.currentTarget.showPicker();
-    } catch {}
-  };
-
-  return (
-    <fieldset className="flex flex-col gap-2" data-missing={invalid || undefined}>
-      <legend className="mb-1.5 text-sm font-semibold text-ink">
-        Thời gian <Required />
-      </legend>
-      <div className="grid auto-cols-fr grid-flow-col gap-2">
-        {quick.map((q) => {
-          const on = q.day === day;
-          const [, m, d] = q.day.split("-").map(Number);
-          return (
-            <button
-              type="button"
-              key={q.day}
-              aria-pressed={on}
-              onClick={() => onDay(q.day)}
-              className={`flex h-14 flex-col items-center justify-center rounded-xl text-sm font-semibold leading-tight transition-colors ${
-                on ? "bg-accent text-on-accent" : "border border-line bg-surface text-ink hover:bg-sunken"
-              }`}
-            >
-              {q.label}
-              <span className={`text-xs font-medium tabular-nums ${on ? "opacity-85" : "text-muted"}`}>
-                {d}/{m}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <label className="relative min-w-0">
-          <span className="sr-only">Ngày</span>
-          <CalendarGlyph />
-          <input
-            type="date"
-            value={day}
-            onChange={(e) => onDay(e.target.value)}
-            onClick={openPicker}
-            aria-invalid={(invalid && !day) || undefined}
-            className={field}
-          />
-        </label>
-        <label className="relative min-w-0">
-          <span className="sr-only">Giờ</span>
-          <ClockGlyph />
-          <input
-            type="time"
-            value={time}
-            step={300}
-            onChange={(e) => onTime(e.target.value)}
-            onClick={openPicker}
-            aria-invalid={(invalid && !time) || undefined}
-            className={field}
-          />
-        </label>
-      </div>
-      {day && (
-        <p aria-live="polite" className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-1">
-          <span className="text-base font-semibold text-ink">
-            {formatDayLong(day)}
-            {time && <span className="tabular-nums"> · {time}</span>}
-          </span>
-          <span className="text-sm text-muted">{relativeDay(day, today)}</span>
-        </p>
-      )}
-      {invalid && <FieldError>{day ? "Chọn giờ." : "Chọn ngày."}</FieldError>}
-    </fieldset>
-  );
-}
-
-const glyph = "pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted";
-
-function CalendarGlyph() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      className={glyph}
-    >
-      <rect x="3" y="4.5" width="18" height="16.5" rx="2.5" />
-      <path d="M8 2.5v4M16 2.5v4M3 10h18" />
-    </svg>
-  );
-}
-
-function ClockGlyph() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      className={glyph}
-    >
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </svg>
   );
 }
 
