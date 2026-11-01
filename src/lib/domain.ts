@@ -201,11 +201,9 @@ export const dayKey = (d: Date | string) => new Date(new Date(d).getTime() + VN_
 export const dayStart = (key: string) => new Date(`${key}T00:00:00+07:00`);
 export const addDays = (key: string, n: number) =>
   new Date(Date.parse(`${key}T00:00:00Z`) + n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-// Monday = 0 … Sunday = 6
-export const weekdayIndex = (key: string) => (new Date(`${key}T00:00:00Z`).getUTCDay() + 6) % 7;
+// Weeks run Sunday to Saturday everywhere (stats, month calendars): Sunday = 0 … Saturday = 6.
+export const weekdayIndex = (key: string) => new Date(`${key}T00:00:00Z`).getUTCDay();
 export const weekStart = (key: string) => addDays(key, -weekdayIndex(key));
-// Stats weeks run Sunday to Saturday (Sunday is the first day), unlike the Monday-first calendar.
-export const sundayWeekStart = (key: string) => addDays(key, -((weekdayIndex(key) + 1) % 7));
 // "Đạt" a week: at least this many sessions (buổi trudo) in it.
 export const WEEKLY_SESSION_GOAL = 8;
 
@@ -220,7 +218,7 @@ export function addMonths(month: string, n: number) {
   return d.toISOString().slice(0, 7);
 }
 
-// Whole weeks (Monday first) covering the month: 4 to 6 rows of 7 day keys.
+// Whole weeks (Sunday first) covering the month: 4 to 6 rows of 7 day keys.
 export function monthGrid(month: string): string[][] {
   const first = weekStart(`${month}-01`);
   const last = addDays(`${addMonths(month, 1)}-01`, -1);
@@ -229,7 +227,8 @@ export function monthGrid(month: string): string[][] {
   return weeks;
 }
 
-export const WEEKDAY_SHORT = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+// Indexed by weekdayIndex; also the column heads of a monthGrid.
+export const WEEKDAY_SHORT = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
 const timeFmt = new Intl.DateTimeFormat("vi-VN", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit" });
 const dayLongFmt = new Intl.DateTimeFormat("vi-VN", {

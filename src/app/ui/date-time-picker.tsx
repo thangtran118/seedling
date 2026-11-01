@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { addMonths, dayKey, formatDayLong, formatMonth, monthGrid, relativeDay, WEEKDAY_SHORT } from "@/lib/domain";
+import { addMonths, WEEKDAY_SHORT, dayKey, formatDayLong, formatMonth, monthGrid, relativeDay } from "@/lib/domain";
 import { INPUT } from "./kit";
 
 const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));

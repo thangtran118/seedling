@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { listenerLinks, listenerPrivate, listeners, sessionMembers, sessions, users } from "@/db/schema";
-import { addDays, dayKey, dayStart, sundayWeekStart, WEEKLY_SESSION_GOAL } from "@/lib/domain";
+import { addDays, dayKey, dayStart, weekStart, WEEKLY_SESSION_GOAL } from "@/lib/domain";
 import { pickedOrOwnArea } from "./areas";
 import type { SessionUser } from "./auth";
 import { forbiddenError, notFoundError } from "./errors";
@@ -76,10 +76,10 @@ function listenerNumbers(rows: ListenerRow[], now: Date) {
 function weekNumbers(sessionDates: Date[], now: Date) {
   const perWeek = new Map<string, number>();
   for (const d of sessionDates) {
-    const w = sundayWeekStart(dayKey(d));
+    const w = weekStart(dayKey(d));
     perWeek.set(w, (perWeek.get(w) ?? 0) + 1);
   }
-  const thisWeek = sundayWeekStart(dayKey(now));
+  const thisWeek = weekStart(dayKey(now));
   const reached = (w: string) => (perWeek.get(w) ?? 0) >= WEEKLY_SESSION_GOAL;
   let streakWeeks = reached(thisWeek) ? 1 : 0;
   for (let w = addDays(thisWeek, -7); reached(w); w = addDays(w, -7)) streakWeeks += 1;
