@@ -104,6 +104,164 @@ label:has(> input[type="checkbox"]) {
   outline-offset: 0;
 }
 
+/* Selects stay native <select>s (forms, keyboard and screen readers keep working) with one modern look on top.
+   Unlayered on purpose: it must beat the px-3 utility to leave room for the chevron. */
+select {
+  appearance: none;
+  padding-right: 2.5rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237d8983' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1.125rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+  transition:
+    border-color 150ms,
+    background-color 150ms,
+    box-shadow 150ms;
+}
+select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+select:active:not(:disabled) {
+  background-color: var(--sunken);
+}
+
+/* Where the browser lets the open list be styled (Chromium, incl. Android), draw it ourselves: rounded panel,
+   44px rows, a check on the chosen one. Elsewhere (iOS Safari) the phone's own picker opens, which is fine. */
+@supports (appearance: base-select) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+  select {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-right: 0.75rem;
+    background-image: none;
+  }
+  select::picker-icon {
+    content: "";
+    flex-shrink: 0;
+    width: 1.125rem;
+    height: 1.125rem;
+    margin-inline-start: auto;
+    background: var(--muted);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    transition: rotate 200ms;
+  }
+  select:open {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  select:open::picker-icon {
+    rotate: 180deg;
+  }
+
+  ::picker(select) {
+    margin-block: 0.375rem;
+    padding: 0.375rem;
+    max-height: min(22rem, 60dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--line);
+    border-radius: 0.875rem;
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow:
+      0 12px 32px -8px rgb(0 0 0 / 0.22),
+      0 2px 6px rgb(0 0 0 / 0.06);
+    opacity: 1;
+    translate: 0 0;
+    transition:
+      opacity 160ms,
+      translate 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      overlay 200ms allow-discrete,
+      display 200ms allow-discrete;
+  }
+  select:not(:open)::picker(select) {
+    opacity: 0;
+  }
+  @starting-style {
+    select:open::picker(select) {
+      opacity: 0;
+      translate: 0 -0.25rem;
+    }
+  }
+
+  option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-weight: 400;
+    transition: background-color 120ms;
+  }
+  option:hover,
+  option:focus-visible {
+    background: var(--sunken);
+    outline: none;
+  }
+  option:checked {
+    color: var(--accent);
+    font-weight: 600;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  option::checkmark {
+    order: 1;
+    margin-inline-start: auto;
+    content: "✓";
+    font-weight: 700;
+  }
+  option:disabled {
+    color: var(--muted);
+    background: none;
+  }
+
+  /* Phones: the list rises from the bottom edge, under the thumb, instead of hanging off the field. */
+  @media (max-width: 767px) {
+    ::picker(select) {
+      position: fixed;
+      position-area: none;
+      position-try-fallbacks: none;
+      inset: auto 0 0 0;
+      width: auto;
+      margin: 0;
+      max-height: 70dvh;
+      padding: 0.75rem 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
+      border-width: 1px 0 0;
+      border-radius: 1.25rem 1.25rem 0 0;
+      box-shadow:
+        0 -12px 40px rgb(0 0 0 / 0.25),
+        0 0 0 100vmax rgb(0 0 0 / 0.35);
+    }
+    select:not(:open)::picker(select) {
+      translate: 0 100%;
+    }
+    @starting-style {
+      select:open::picker(select) {
+        translate: 0 100%;
+      }
+    }
+    option {
+      min-height: 3rem;
+      font-size: 1rem;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::picker(select),
+  select::picker-icon {
+    transition: none;
+  }
+}
+
 /* Expanding ring behind the live dot. Respects reduced motion: the dot stays, the pulse goes. */
 @keyframes live-ping {
   0% {
