@@ -14,13 +14,12 @@ import {
   WEEKDAY_SHORT,
   weekdayIndex,
 } from "@/lib/domain";
-import { AreaTag } from "./area-tag";
 import { ActionForm, PendingButton } from "./action-form";
-import { KindIcon, PHASE_TONE, PhaseBadge } from "./kit";
+import { KindIcon, PhaseBadge, PhaseMark } from "./kit";
 
 const names = (xs: { name: string }[]) => xs.map((x) => x.name).join(", ");
 
-// One "Label: value" line under the listener names; a muted value stands for "nothing yet", a red one for "needed".
+// One "label · value" pair of the card's list; a muted value stands for "nothing yet", a red one for "needed".
 function Row({
   label,
   children,
@@ -32,11 +31,17 @@ function Row({
   empty?: boolean;
   alert?: boolean;
 }) {
-  const value = alert ? "font-semibold text-danger" : empty ? "" : "font-medium text-ink";
   return (
-    <p className={`mt-0.5 text-sm ${alert ? "text-danger" : "text-muted"}`}>
-      {label}: <span className={value}>{children}</span>
-    </p>
+    <>
+      <dt className={`text-[13px] leading-5 ${alert ? "font-medium text-danger" : "text-muted"}`}>{label}</dt>
+      <dd
+        className={`min-w-0 text-sm leading-5 break-words ${
+          alert ? "font-semibold text-danger" : empty ? "text-muted" : "font-medium text-ink"
+        }`}
+      >
+        {children}
+      </dd>
+    </>
   );
 }
 
@@ -80,11 +85,12 @@ function ListenerNames({ listeners }: { listeners: SessionListItem["listeners"] 
   );
 }
 
-// One session as a row: time on the left, a stripe in the phase color, people on the right. The same card on every
-// page. The phase shows only as the stripe's color, except a cancelled session: a grey card with a "Đã hủy" badge.
-// A visit today with no AE chia sẻ chính yet gets a red border and a red line until someone takes it.
-// While the viewer can still join, a "Tham gia" button floats in the top-right corner instead of taking a row of its
-// own; it is as tall as the first line, with a larger invisible tap area.
+// One session as a card, the same on every page. Header: the listener names in large type on the left (a badge under
+// them when the session is live or cancelled), the time (and date) on the right, after the calendar legend's phase
+// mark; then the people, the place and, when it is another one, the area as a two-column list. A visit today with no
+// AE chia sẻ chính yet gets a red border and a red line until someone takes it. While the viewer can still join,
+// "Tham gia ca" spans the bottom of the card, under the thumb and clear of the text, so narrow phones never cut the
+// names short.
 export function SessionCard({
   s,
   note,
@@ -97,78 +103,83 @@ export function SessionCard({
   showDate?: boolean;
 }) {
   const phase = sessionPhase(s.state, s.startsAt, now);
-  const tone = PHASE_TONE[phase];
   const key = dayKey(s.startsAt);
   const canJoin = s.canJoin && isOpenPhase(phase);
   const cancelled = phase === "cancelled";
   const alert = needsSharer(s, now);
   return (
     <div
-      className={`relative rounded-2xl border transition-colors ${
-        alert ? "border-danger/60 hover:border-danger" : "border-line hover:border-muted/50"
+      className={`overflow-hidden rounded-2xl border shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition-colors ${
+        alert
+          ? "border-danger/50 hover:border-danger"
+          : phase === "live"
+            ? "border-live/40 hover:border-live/70"
+            : "border-line hover:border-muted/50"
       } ${cancelled ? "bg-sunken" : "bg-surface"}`}
     >
-      <Link href={`/ca/${s.id}`} className="flex gap-3 rounded-2xl p-3 active:bg-line/30">
-        <div className="flex w-12 shrink-0 flex-col items-center justify-center text-center">
-          <span className={`text-base font-bold tabular-nums ${cancelled ? "text-muted line-through" : "text-ink"}`}>
-            {formatTime(s.startsAt)}
-          </span>
-          {showDate && (
-            <span className="text-[11px] text-muted">
-              {WEEKDAY_SHORT[weekdayIndex(key)]} {key.slice(8)}/{key.slice(5, 7)}
-            </span>
-          )}
-        </div>
-        <span
-          className={`w-1 shrink-0 rounded-full ${tone.bg} ${phase === "upcoming" ? "opacity-40" : ""}`}
-          aria-hidden
-        />
-        <span className="sr-only">{PHASE_LABEL[phase]}</span>
-        <div className="min-w-0 flex-1">
-          {/* pr-24: the listener names stop short of the floating "Tham gia" button. */}
-          <div className={`flex items-start justify-between gap-2 ${canJoin ? "pr-24" : ""}`}>
-            <span className={`truncate font-semibold ${cancelled ? "text-muted line-through" : "text-ink"}`}>
+      <Link href={`/ca/${s.id}`} className="block p-3.5 active:bg-line/30">
+        {/* Header: who on the left (with any tags under the names), when on the right. */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className={`text-lg leading-snug font-bold ${cancelled ? "text-muted line-through" : "text-ink"}`}>
               {s.kind === "outreach" ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <KindIcon kind="outreach" size={16} />
+                  <KindIcon kind="outreach" size={18} />
                   Đi tiếp xúc
                 </span>
               ) : (
                 <ListenerNames listeners={s.listeners} />
               )}
-            </span>
-            {cancelled && <PhaseBadge phase={phase} />}
-          </div>
-          <div className={cancelled ? "opacity-60" : ""}>
-            {s.kind === "visit" && <Owners listeners={s.listeners} />}
-            <Row label="AE tham gia" empty={s.members.length === 0}>
-              {s.members.length ? names(s.members) : "Chưa có ai"}
-            </Row>
-            {s.kind === "visit" && (
-              <Row label="AE chia sẻ chính" empty={!s.sharer} alert={alert}>
-                {s.sharer?.name ?? "Chưa có ae np"}
-              </Row>
-            )}
-            <Row label="Địa điểm" empty={!s.locationLabel}>
-              {s.locationLabel ?? "Chưa ghi"}
-            </Row>
-            {s.otherArea && (
+            </p>
+            {(cancelled || phase === "live") && (
               <div className="mt-1">
-                <AreaTag name={s.otherArea} />
+                <PhaseBadge phase={phase} />
               </div>
             )}
           </div>
-          {note && <p className="mt-1 text-sm font-medium text-accent">{note}</p>}
+          <div className="flex shrink-0 flex-col items-end pt-0.5">
+            <span className="flex items-center gap-1.5">
+              <PhaseMark phase={phase} />
+              <span className="sr-only">{PHASE_LABEL[phase]}</span>
+              <span
+                className={`text-lg leading-snug font-bold tabular-nums ${cancelled ? "text-muted line-through" : "text-ink"}`}
+              >
+                {formatTime(s.startsAt)}
+              </span>
+            </span>
+            {showDate && (
+              <span className="text-xs text-muted tabular-nums">
+                {WEEKDAY_SHORT[weekdayIndex(key)]} {key.slice(8)}/{key.slice(5, 7)}
+              </span>
+            )}
+          </div>
         </div>
+
+        <dl
+          className={`mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-line pt-2 ${
+            cancelled ? "opacity-60" : ""
+          }`}
+        >
+          {s.kind === "visit" && <Owners listeners={s.listeners} />}
+          <Row label="AE tham gia" empty={s.members.length === 0}>
+            {s.members.length ? names(s.members) : "Chưa có ai"}
+          </Row>
+          {s.kind === "visit" && (
+            <Row label="AE chia sẻ chính" empty={!s.sharer} alert={alert}>
+              {s.sharer?.name ?? "Chưa có ae np"}
+            </Row>
+          )}
+          <Row label="Địa điểm" empty={!s.locationLabel}>
+            {s.locationLabel ?? "Chưa ghi"}
+          </Row>
+          {s.otherArea && <Row label="Khu vực">{s.otherArea}</Row>}
+        </dl>
+        {note && <p className="mt-2 text-sm font-medium text-accent">{note}</p>}
       </Link>
       {canJoin && (
-        <ActionForm
-          action={joinSessionAction}
-          hidden={{ sessionId: s.id }}
-          className="absolute right-2 top-2 flex max-w-48 flex-col items-end text-right"
-        >
-          <PendingButton className="relative h-8 rounded-full bg-accent px-4 text-sm font-semibold text-on-accent shadow-md before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']">
-            Tham gia
+        <ActionForm action={joinSessionAction} hidden={{ sessionId: s.id }} className="px-3.5 pb-3.5">
+          <PendingButton className="h-11 w-full rounded-xl bg-accent text-base font-semibold text-on-accent transition-opacity hover:opacity-90">
+            Tham gia ca
           </PendingButton>
         </ActionForm>
       )}
