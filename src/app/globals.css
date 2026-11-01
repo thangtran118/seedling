@@ -262,6 +262,27 @@ select:active:not(:disabled) {
   }
 }
 
+/* Date and time fields: a glyph drawn by the page sits on the left, so the browser's own icon goes, and iOS
+   (which centers the value and sizes the field to it) lines up and fills like any other input. */
+input[type="date"],
+input[type="time"] {
+  appearance: none;
+  min-width: 0;
+  text-align: left;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  display: none;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+input[type="date"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit {
+  padding: 0;
+}
+
 /* Expanding ring behind the live dot. Respects reduced motion: the dot stays, the pulse goes. */
 @keyframes live-ping {
   0% {

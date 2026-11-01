@@ -240,6 +240,14 @@ const dayLongFmt = new Intl.DateTimeFormat("vi-VN", {
 });
 export const formatTime = (d: Date | string) => timeFmt.format(new Date(d));
 export const formatDayLong = (key: string) => dayLongFmt.format(new Date(`${key}T12:00:00+07:00`));
+// How far a day is from today, in words: "Hôm nay", "Ngày mai", "Còn 5 ngày", "3 ngày trước".
+export function relativeDay(key: string, today: string) {
+  const diff = Math.round((Date.parse(key) - Date.parse(today)) / (24 * 60 * 60 * 1000));
+  if (diff === 0) return "Hôm nay";
+  if (diff === 1) return "Ngày mai";
+  if (diff === 2) return "Ngày kia";
+  return diff > 0 ? `Còn ${diff} ngày` : `${-diff} ngày trước`;
+}
 export const formatMonth = (month: string) => `Tháng ${Number(month.slice(5))}, ${month.slice(0, 4)}`;
 
 // "35 phút", "1 giờ 20 phút": elapsed or remaining time for live and soon-starting sessions.
